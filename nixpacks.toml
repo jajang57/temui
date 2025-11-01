@@ -1,0 +1,12 @@
+[phases.setup]
+nixPkgs = ['go_1_21']
+
+[phases.build]
+cmds = ['go mod tidy', 'go build -o main .']
+
+[phases.start]
+cmd = './main'
+
+[variables]
+CGO_ENABLED = '0'
+GOOS = 'linux'

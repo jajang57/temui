@@ -111,6 +111,12 @@ func main() {
 	r.POST("/api/login", handlers.Login(db))
 	r.GET("/api/user-theme-setting", handlers.GetUserThemeSetting(db))
 	r.POST("/api/user-theme-setting", handlers.SaveUserThemeSetting(db))
+
+	// Health check endpoint for Railway
+	r.GET("/api/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok", "message": "Server is healthy"})
+	})
+
 	// Protected routes (perlu authentication)
 	api := r.Group("/api")
 	api.Use(handlers.AuthMiddleware())
