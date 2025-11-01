@@ -1,0 +1,7 @@
+frontend/
+frontend/node_modules/
+.git/
+.gitignore
+README.md
+start_servers.bat
+*.lnk
