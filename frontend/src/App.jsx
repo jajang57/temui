@@ -18,7 +18,7 @@ import MasterBarangJasa from "./pages/master-data/MasterBarangJasa";
 import MasterPersediaan from "./pages/master-data/MasterPersediaan";
 import MasterGudang from "./pages/master-data/MasterGudang";
 import MasterMataUang from "./pages/master-data/MasterMataUang";
-import MasterPajak from "./pages/master-data/MasterPajak";
+import MasterPajak from "./pages/master-data/masterPajak";
 import Setting from "./pages/Setting";
 import TrialBalance from "./pages/laporan/TrialBalance";
 import BukuBesar from "./pages/laporan/BukuBesar";
