@@ -92,6 +92,8 @@ func main() {
 		"http://127.0.0.1:5173",
 		"http://26.49.48.174:3000",
 		"http://100.67.149.101:3000",
+		"https://temui.vercel.app",           // Production Vercel URL
+		"https://temui-5bpq.vercel.app",      // Vercel preview URL
 	}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"}
