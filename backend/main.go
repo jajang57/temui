@@ -95,6 +95,7 @@ func main() {
 		"http://100.67.149.101:3000",
 		"https://temui.vercel.app",                               // Production Vercel URL
 		"https://temui-5bpq.vercel.app",                          // Vercel preview URL
+		"https://temui-production.up.railway.app",                // Production Railway URL
 		"https://temui-git-master-jajang57s-projects.vercel.app", // Git branch URL
 	}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
