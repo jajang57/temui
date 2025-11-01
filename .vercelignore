@@ -1,0 +1,9 @@
+backend/
+*.go
+go.mod
+go.sum
+.git/
+.gitignore
+*.md
+start_servers.bat
+*.lnk
