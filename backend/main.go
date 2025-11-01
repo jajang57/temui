@@ -92,7 +92,8 @@ func main() {
 			"http://127.0.0.1:3001",
 			"http://127.0.0.1:5173",
 			"https://temui.vercel.app",
-			"https://temui-5bpq.vercel.app",
+			"https://temui-5bpq.vercel.app", // Old preview URL
+			"https://temui-5hga.vercel.app", // Current preview URL
 			"https://temui-git-master-jajang57s-projects.vercel.app",
 			"https://temui-production.up.railway.app",
 		},
