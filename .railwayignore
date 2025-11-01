@@ -1,0 +1,3 @@
+# Force Railway to use Dockerfile, not nixpacks auto-detection
+go.mod
+main.go
