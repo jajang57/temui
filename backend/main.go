@@ -83,18 +83,19 @@ func main() {
 
 	// Konfigurasi CORS yang lebih detail
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{
-		"http://localhost:3000",
-		"http://localhost:3001",
-		"http://localhost:5173",
-		"http://127.0.0.1:3000",
-		"http://127.0.0.1:3001",
-		"http://127.0.0.1:5173",
-		"http://26.49.48.174:3000",
-		"http://100.67.149.101:3000",
-		"https://temui.vercel.app",           // Production Vercel URL
-		"https://temui-5bpq.vercel.app",      // Vercel preview URL
-	}
+	config.AllowAllOrigins = true // Allow all origins untuk testing
+	// config.AllowOrigins = []string{
+	//	"http://localhost:3000",
+	//	"http://localhost:3001",
+	//	"http://localhost:5173",
+	//	"http://127.0.0.1:3000",
+	//	"http://127.0.0.1:3001",
+	//	"http://127.0.0.1:5173",
+	//	"http://26.49.48.174:3000",
+	//	"http://100.67.149.101:3000",
+	//	"https://temui.vercel.app",
+	//	"https://temui-5bpq.vercel.app",
+	// }
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"}
 	config.ExposeHeaders = []string{"Content-Length"}
