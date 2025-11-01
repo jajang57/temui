@@ -16,12 +16,15 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o main .
 # Production stage
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates tzdata
+RUN apk --no-cache add ca-certificates tzdata bind-tools
 WORKDIR /app
 
 # Copy the binary from builder stage
 COPY --from=builder /app/main .
 RUN chmod +x ./main
+
+# Test DNS resolution
+RUN nslookup db.brivecenezhjlywxifvs.supabase.co || echo "DNS lookup failed"
 
 # Expose port
 EXPOSE 8080
