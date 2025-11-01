@@ -82,26 +82,42 @@ func main() {
 
 	r := gin.Default()
 
-	// Konfigurasi CORS yang lebih detail
-	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{
-		"http://localhost:3000",
-		"http://localhost:3001",
-		"http://localhost:5173",
-		"http://127.0.0.1:3000",
-		"http://127.0.0.1:3001",
-		"http://127.0.0.1:5173",
-		"http://26.49.48.174:3000",
-		"http://100.67.149.101:3000",
-		"https://temui.vercel.app",                               // Production Vercel URL
-		"https://temui-5bpq.vercel.app",                          // Vercel preview URL
-		"https://temui-production.up.railway.app",                // Production Railway URL
-		"https://temui-git-master-jajang57s-projects.vercel.app", // Git branch URL
+	// Konfigurasi CORS yang lebih permissive untuk debugging
+	config := cors.Config{
+		AllowOrigins: []string{
+			"http://localhost:3000",
+			"http://localhost:3001",
+			"http://localhost:5173",
+			"http://127.0.0.1:3000",
+			"http://127.0.0.1:3001",
+			"http://127.0.0.1:5173",
+			"https://temui.vercel.app",
+			"https://temui-5bpq.vercel.app",
+			"https://temui-git-master-jajang57s-projects.vercel.app",
+			"https://temui-production.up.railway.app",
+		},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+		AllowHeaders: []string{
+			"Origin",
+			"Content-Type",
+			"Accept",
+			"Authorization",
+			"X-Requested-With",
+			"Access-Control-Request-Method",
+			"Access-Control-Request-Headers",
+		},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * 60 * 60, // 12 hours
 	}
-	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"}
-	config.ExposeHeaders = []string{"Content-Length"}
-	config.AllowCredentials = true
+
+	// Debug middleware untuk melihat Origin requests
+	r.Use(func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		fmt.Printf("DEBUG: Request from origin: %s\n", origin)
+		fmt.Printf("DEBUG: Method: %s, Path: %s\n", c.Request.Method, c.Request.URL.Path)
+		c.Next()
+	})
 
 	r.Use(cors.New(config))
 
