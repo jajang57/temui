@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"project-akuntansi-backend/config"
 	"project-akuntansi-backend/handlers"
 	"project-akuntansi-backend/models"
@@ -264,6 +265,12 @@ func main() {
 		api.GET("/persediaan/mutasi", inv.GetInventoryMutasi)
 	}
 
-	r.Run("0.0.0.0:8080")
-	// filepath: d:\project-akuntansi\backend\main.go
+	// Use PORT from environment or default to 8080
+	port := "8080"
+	if envPort := os.Getenv("PORT"); envPort != "" {
+		port = envPort
+	}
+
+	fmt.Printf("Starting server on port %s...\n", port)
+	r.Run("0.0.0.0:" + port)
 }
