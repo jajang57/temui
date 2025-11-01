@@ -23,9 +23,6 @@ WORKDIR /app
 COPY --from=builder /app/main .
 RUN chmod +x ./main
 
-# Debug - list files and check binary
-RUN ls -la && file ./main
-
 # Expose port
 EXPOSE 8080
 
