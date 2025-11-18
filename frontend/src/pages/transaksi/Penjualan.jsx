@@ -70,6 +70,7 @@ export default function Penjualan() {
   const [items, setItems] = useState([]);
 
   const [masterBarangJasa, setMasterBarangJasa] = useState([]);
+  const [itemStocks, setItemStocks] = useState({}); // Stock per item per gudang
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [listPenjualan, setListPenjualan] = useState([]);
@@ -124,6 +125,37 @@ useEffect(() => {
       setMasterBarangJasa(response.data);
     } catch (error) {
       console.error('Error fetching master barang jasa:', error);
+    }
+  };
+
+  // Fetch stock berdasarkan gudang
+  const fetchItemStocks = async (gudangId) => {
+    if (!gudangId) {
+      setItemStocks({});
+      return;
+    }
+    try {
+      const response = await api.get(`/persediaan/summary`, {
+        params: { gudangId }
+      });
+      
+      const stockMap = {};
+      const dataArray = response.data.data || response.data; // Handle both {data: [...]} and [...]
+      
+      if (dataArray && Array.isArray(dataArray)) {
+        dataArray.forEach((item) => {
+          const itemCode = item.itemCode;
+          const stock = item.saldoAkhirQty;
+          if (itemCode) {
+            stockMap[itemCode] = stock || 0;
+          }
+        });
+      }
+      console.log('Stock map:', stockMap);
+      setItemStocks(stockMap);
+    } catch (error) {
+      console.error('Error fetching item stocks:', error);
+      setItemStocks({});
     }
   };
 
@@ -476,16 +508,19 @@ useEffect(() => {
   );
 
   // Fungsi untuk handle edit
-  const handleEdit = (trx) => {
+  const handleEdit = async (trx) => {
     setShowForm(true);
     setEditMode(true);
     setEditId(trx.id);
+    
+    const gudangId = String(trx.gudangId);
+    
     setFormData({
       nomorInvoice: trx.nomorInvoice,
       tanggal: trx.tanggal?.split('T')[0] || '',
       dueDate: trx.dueDate?.split('T')[0] || '',
       customer: String(trx.customerId),
-      gudang: String(trx.gudangId),
+      gudang: gudangId,
       departement: String(trx.departementId),
       nomorEfaktur: trx.nomorEfaktur || '',
       notes: trx.notes || '',
@@ -493,24 +528,88 @@ useEffect(() => {
       stamp: trx.stamp || 0,
       // tambahkan field lain jika ada
     });
-    setItems(trx.details?.map((item) => ({
-      id: item.id, // gunakan id dari backend jika ada, jika tidak buat baru
-      kodeItem: item.kodeItem,
-      namaItem: item.namaItem,
-      qty: item.qty,
-      unit: item.unit,
-      price: item.price,
-      discPercent: item.discPercent,
-      discAmountItem: item.discAmountItem,
-      discAmount: item.discAmount,
-      tax: item.tax,
-      taxamount1: item.taxamount1,
-      taxamount2: item.taxamount2,
-      taxamount3: item.taxamount3,
-      dpp: item.dpp,
-      amount: item.amount,
-      gudang: String(item.gudangId || item.gudang)
-    })) || []);
+    
+    // Fetch stock untuk gudang ini dan tunggu selesai
+    try {
+      const response = await api.get(`/persediaan/summary`, {
+        params: { gudangId }
+      });
+      
+      const stockMap = {};
+      const dataArray = response.data.data || response.data;
+      
+      if (dataArray && Array.isArray(dataArray)) {
+        dataArray.forEach((item) => {
+          const itemCode = item.itemCode;
+          const stock = item.saldoAkhirQty;
+          if (itemCode) {
+            stockMap[itemCode] = stock || 0;
+          }
+        });
+      }
+      
+      console.log('Stock map saat edit:', stockMap);
+      setItemStocks(stockMap);
+      
+      // Set items dengan maxStock dari stock yang baru di-fetch
+      // PENTING: Saat edit, stock yang ditampilkan = stock sekarang + TOTAL qty item ini di semua baris transaksi
+      
+      // Hitung total qty per item dari transaksi ini
+      const qtyPerItem = {};
+      trx.details?.forEach((item) => {
+        const code = item.kodeItem;
+        qtyPerItem[code] = (qtyPerItem[code] || 0) + (parseFloat(item.qty) || 0);
+      });
+      
+      setItems(trx.details?.map((item) => {
+        const currentStock = stockMap[item.kodeItem] || 0;
+        const totalQtyInTransaction = qtyPerItem[item.kodeItem] || 0;
+        const totalAvailableStock = currentStock + totalQtyInTransaction; // Stock tersedia = stock sekarang + total qty item ini di transaksi
+        
+        return {
+          id: item.id,
+          kodeItem: item.kodeItem,
+          namaItem: item.namaItem,
+          qty: item.qty,
+          unit: item.unit,
+          price: item.price,
+          discPercent: item.discPercent,
+          discAmountItem: item.discAmountItem,
+          discAmount: item.discAmount,
+          tax: item.tax,
+          taxamount1: item.taxamount1,
+          taxamount2: item.taxamount2,
+          taxamount3: item.taxamount3,
+          dpp: item.dpp,
+          amount: item.amount,
+          gudang: String(item.gudangId || item.gudang),
+          maxStock: totalAvailableStock  // Stock total = stock sekarang + total qty item ini di transaksi
+        };
+      }) || []);
+      
+    } catch (error) {
+      console.error('Error fetching stocks on edit:', error);
+      // Tetap set items meskipun error
+      setItems(trx.details?.map((item) => ({
+        id: item.id,
+        kodeItem: item.kodeItem,
+        namaItem: item.namaItem,
+        qty: item.qty,
+        unit: item.unit,
+        price: item.price,
+        discPercent: item.discPercent,
+        discAmountItem: item.discAmountItem,
+        discAmount: item.discAmount,
+        tax: item.tax,
+        taxamount1: item.taxamount1,
+        taxamount2: item.taxamount2,
+        taxamount3: item.taxamount3,
+        dpp: item.dpp,
+        amount: item.amount,
+        gudang: String(item.gudangId || item.gudang),
+        maxStock: 0
+      })) || []);
+    }
   };
 
   // Fungsi hapus transaksi penjualan
@@ -1165,11 +1264,11 @@ useEffect(() => {
                       </th>
                       <th className="border px-2 py-1" style={{ position: 'relative', width: 100 }}>Gudang
                       </th>
-                      <th className="border px-2 py-1 text-right" style={{ position: 'relative', width: 90 }}>Tax Amount 1
+                      <th className="border px-2 py-1 text-right" style={{ position: 'relative', width: 90, display: 'none' }}>Tax Amount 1
                       </th>
-                      <th className="border px-2 py-1 text-right" style={{ position: 'relative', width: 90 }}>Tax Amount 2
+                      <th className="border px-2 py-1 text-right" style={{ position: 'relative', width: 90, display: 'none' }}>Tax Amount 2
                       </th>
-                      <th className="border px-2 py-1 text-right" style={{ position: 'relative', width: 90 }}>Tax Amount 3
+                      <th className="border px-2 py-1 text-right" style={{ position: 'relative', width: 90, display: 'none' }}>Tax Amount 3
                       </th>
                       <th className="border px-2 py-1 text-right" style={{ position: 'relative', width: columnWidths.dpp }}>
                         DPP
@@ -1246,7 +1345,29 @@ useEffect(() => {
                             }}
                             onBlur={() => {
                               const raw = editingQty[item.id] !== undefined ? editingQty[item.id] : String(item.qty || "");
-                              const num = raw === "" ? 0 : parseFloat(String(raw).replace(/,/g, "."));
+                              let num = raw === "" ? 0 : parseFloat(String(raw).replace(/,/g, "."));
+                              
+                              // Validasi stock - hitung total qty item yang sama di semua baris
+                              const currentItemCode = item.kodeItem;
+                              
+                              // Ambil stock dari itemStocks atau dari maxStock yang tersimpan
+                              const maxStock = itemStocks[currentItemCode] || item.maxStock || 0;
+                              
+                              // Hitung total qty dari baris lain dengan kode item yang sama
+                              const otherRowsQty = items.reduce((total, row, i) => {
+                                if (i !== idx && row.kodeItem === currentItemCode) {
+                                  return total + (parseFloat(row.qty) || 0);
+                                }
+                                return total;
+                              }, 0);
+                              
+                              const availableStock = maxStock - otherRowsQty;
+                              
+                              if (num > availableStock) {
+                                alert(`Qty tidak boleh melebihi stock yang tersedia!\nStock total: ${maxStock}\nSudah digunakan: ${otherRowsQty}\nSisa tersedia: ${availableStock}`);
+                                num = availableStock > 0 ? availableStock : 0;
+                              }
+                              
                               setItems(prev => {
                                 const copy = [...prev];
                                 copy[idx] = { ...copy[idx], qty: Number(Number(num || 0).toFixed(2)) };
@@ -1417,13 +1538,13 @@ useEffect(() => {
                           </select>
                         </td>
 
-                        <td className="border px-2 py-1 text-right" style={{ width: 90 }}>
+                        <td className="border px-2 py-1 text-right" style={{ width: 90, display: 'none' }}>
                           { (item.taxamount1 || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
                         </td>
-                        <td className="border px-2 py-1 text-right" style={{ width: 90 }}>
+                        <td className="border px-2 py-1 text-right" style={{ width: 90, display: 'none' }}>
                           { (item.taxamount2 || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
                         </td>
-                        <td className="border px-2 py-1 text-right" style={{ width: 90 }}>
+                        <td className="border px-2 py-1 text-right" style={{ width: 90, display: 'none' }}>
                           { (item.taxamount3 || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
                         </td>
                         {/* DPP = qty * price - discount (use discAmountItem) */}
@@ -1464,7 +1585,11 @@ useEffect(() => {
                       <span className="font-semibold text-sm" style={{color: theme.fontColor}}>Gudang:</span>
                       <select
                         value={formData.gudang}
-                        onChange={e => setFormData(prev => ({...prev, gudang: e.target.value}))}
+                        onChange={e => {
+                          const gudangId = e.target.value;
+                          setFormData(prev => ({...prev, gudang: gudangId}));
+                          fetchItemStocks(gudangId); // Fetch stock saat gudang dipilih
+                        }}
                         className="px-2 py-1 rounded border text-sm"
                         style={{background: theme.fieldColor, color: theme.fontColor, fontFamily: theme.fontFamily, borderColor: theme.dropdownColor, minWidth: 120}}
                       >
@@ -1490,21 +1615,24 @@ useEffect(() => {
                         {masterBarangJasa.filter(item =>
                           item.kode?.toLowerCase().includes(modalFilter.toLowerCase()) ||
                           item.nama?.toLowerCase().includes(modalFilter.toLowerCase())
-                        ).map((item, idx) => (
-                          <tr key={item.id} style={{background: idx % 2 === 0 ? theme.tableBodyColor : theme.tableAltRowColor, color: theme.tableFontColor}}>
-                            <td className="px-1 py-1 text-center border" style={{borderColor: theme.cardBorderColor}}>
-                              <input type="checkbox" checked={selectedModalItems.includes(item.id)} onChange={e => {
-                                setSelectedModalItems(e.target.checked
-                                  ? [...selectedModalItems, item.id]
-                                  : selectedModalItems.filter(id => id !== item.id));
-                              }} />
-                            </td>
-                            <td className="px-1 py-1 text-center border" style={{borderColor: theme.cardBorderColor}}>{item.kode}</td>
-                            <td className="px-1 py-1 border" style={{borderColor: theme.cardBorderColor}}>{item.nama}</td>
-                            <td className="px-1 py-1 text-center border" style={{borderColor: theme.cardBorderColor}}>{masterGudang.find(g => String(g.id) === String(formData.gudang))?.nama || '-'}</td>
-                            <td className="px-1 py-1 text-center border" style={{borderColor: theme.cardBorderColor}}>{item.stock || 0}</td>
-                          </tr>
-                        ))}
+                        ).map((item, idx) => {
+                          const stock = itemStocks[item.kode] || 0;
+                          return (
+                            <tr key={item.id} style={{background: idx % 2 === 0 ? theme.tableBodyColor : theme.tableAltRowColor, color: theme.tableFontColor}}>
+                              <td className="px-1 py-1 text-center border" style={{borderColor: theme.cardBorderColor}}>
+                                <input type="checkbox" checked={selectedModalItems.includes(item.id)} onChange={e => {
+                                  setSelectedModalItems(e.target.checked
+                                    ? [...selectedModalItems, item.id]
+                                    : selectedModalItems.filter(id => id !== item.id));
+                                }} />
+                              </td>
+                              <td className="px-1 py-1 text-center border" style={{borderColor: theme.cardBorderColor}}>{item.kode}</td>
+                              <td className="px-1 py-1 border" style={{borderColor: theme.cardBorderColor}}>{item.nama}</td>
+                              <td className="px-1 py-1 text-center border" style={{borderColor: theme.cardBorderColor}}>{masterGudang.find(g => String(g.id) === String(formData.gudang))?.nama || '-'}</td>
+                              <td className="px-1 py-1 text-center border" style={{borderColor: theme.cardBorderColor}}>{stock}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1525,7 +1653,8 @@ useEffect(() => {
                          discAmount: 0,
                          tax: 0,
                          amount: 0,
-                         gudang: formData.gudang
+                         gudang: formData.gudang,
+                         maxStock: itemStocks[item.kode] || 0  // Simpan max stock
                        }));
                        setItems(prev => [...prev, ...newDetailItems]);
                        setShowModal(false);

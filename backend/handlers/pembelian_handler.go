@@ -461,7 +461,7 @@ func (h *PembelianHandler) DeletePembelian(c *gin.Context) {
 	}()
 
 	// Delete GL entries
-	if err := tx.Where("nomor_bukti = ?", existing.NomorAPInvoice).Delete(&models.GL{}).Error; err != nil {
+	if err := tx.Where("nomor_transaksi = ?", existing.NomorAPInvoice).Delete(&models.GL{}).Error; err != nil {
 		tx.Rollback()
 		log.Printf("[pembelian] failed to delete GL entries: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghapus GL entries"})

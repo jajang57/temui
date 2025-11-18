@@ -51,19 +51,21 @@ type invEvent struct {
 }
 
 type invMutasiRow struct {
-	Tanggal    time.Time `json:"tanggal"`
-	Sumber     string    `json:"sumber"`
-	Nomor      string    `json:"nomor"`
-	ItemCode   string    `json:"itemCode"`
-	ItemName   string    `json:"itemName"`
-	GudangID   uint      `json:"gudangId"`
-	GudangName string    `json:"gudangName"`
-	QtyMasuk   float64   `json:"qtyMasuk"`
-	QtyKeluar  float64   `json:"qtyKeluar"`
-	Harga      float64   `json:"harga"`
-	SaldoQty   float64   `json:"saldoQty"`
-	SaldoNilai float64   `json:"saldoNilai"`
-	Keterangan string    `json:"keterangan"`
+	Tanggal        time.Time `json:"tanggal"`
+	Sumber         string    `json:"sumber"`
+	Nomor          string    `json:"nomor"`
+	ItemCode       string    `json:"itemCode"`
+	ItemName       string    `json:"itemName"`
+	GudangID       uint      `json:"gudangId"`
+	GudangName     string    `json:"gudangName"`
+	QtyMasuk       float64   `json:"qtyMasuk"`
+	QtyKeluar      float64   `json:"qtyKeluar"`
+	Harga          float64   `json:"harga"`
+	SaldoQty       float64   `json:"saldoQty"`
+	SaldoNilai     float64   `json:"saldoNilai"`
+	Keterangan     string    `json:"keterangan"`
+	SaldoAwalQty   float64   `json:"saldoAwalQty,omitempty"`   // Opening balance qty (for item header)
+	SaldoAwalNilai float64   `json:"saldoAwalNilai,omitempty"` // Opening balance value (for item header)
 }
 
 // ========== Helpers ==========
@@ -302,17 +304,32 @@ func (h *InventoryHandler) GetInventorySummary(c *gin.Context) {
 		}
 	}
 
+	// Gabungkan semua keys dari opening balance dan periode
+	allKeys := make(map[key]bool)
+	for k := range groupBeginQty {
+		allKeys[k] = true
+	}
+	for k := range groupPer {
+		allKeys[k] = true
+	}
+
 	var results []invSummaryRow
-	for k, list := range groupPer {
+	for k := range allKeys {
 		beginQty := groupBeginQty[k]
 		beginCost := groupBeginCost[k]
+
+		list := groupPer[k]
 		_, endQty, endCost := runMovingAverage(beginQty, beginCost, list)
 
 		itemName := ""
 		gudangName := ""
 		if len(list) > 0 {
 			itemName = list[0].ItemName
-			gudangName = list[0].Gudang // was: list[0].GudangName/gudang_name
+			gudangName = list[0].Gudang
+		} else if len(groupMap[k]) > 0 {
+			// Ambil dari opening balance jika tidak ada di periode
+			itemName = groupMap[k][0].ItemName
+			gudangName = groupMap[k][0].Gudang
 		}
 
 		results = append(results, invSummaryRow{
@@ -350,9 +367,23 @@ func (h *InventoryHandler) GetInventoryMutasi(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil saldo awal"})
 		return
 	}
-	beginQty, beginCost := 0.0, 0.0
-	if len(evBefore) > 0 {
-		_, beginQty, beginCost = runMovingAverage(0, 0, evBefore)
+
+	// Group opening balance per item+gudang
+	type key struct {
+		item   string
+		gudang uint
+	}
+	groupBeginQty := map[key]float64{}
+	groupBeginCost := map[key]float64{}
+	groupMapBefore := map[key][]invEvent{}
+	for _, e := range evBefore {
+		k := key{item: e.ItemCode, gudang: e.GudangID}
+		groupMapBefore[k] = append(groupMapBefore[k], e)
+	}
+	for k, list := range groupMapBefore {
+		_, q, cost := runMovingAverage(0, 0, list)
+		groupBeginQty[k] = q
+		groupBeginCost[k] = cost
 	}
 
 	evPeriod, err := h.fetchEventsBetween(itemCode, gidPtr, &start, &end)
@@ -360,6 +391,94 @@ func (h *InventoryHandler) GetInventoryMutasi(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil mutasi"})
 		return
 	}
-	rows, _, _ := runMovingAverage(beginQty, beginCost, evPeriod)
-	c.JSON(http.StatusOK, gin.H{"data": rows})
+
+	// Group period events per item+gudang
+	groupPer := map[key][]invEvent{}
+	for _, e := range evPeriod {
+		k := key{item: e.ItemCode, gudang: e.GudangID}
+		groupPer[k] = append(groupPer[k], e)
+	}
+
+	// Merge keys: include all items with opening balance OR period transactions
+	allKeys := make(map[key]bool)
+	for k := range groupBeginQty {
+		allKeys[k] = true
+	}
+	for k := range groupPer {
+		allKeys[k] = true
+	}
+
+	// Calculate each group with proper opening balance
+	var allRows []invMutasiRow
+	for k := range allKeys {
+		beginQty := groupBeginQty[k]
+		beginCost := groupBeginCost[k]
+		list := groupPer[k] // might be empty if only opening balance exists
+
+		// Get item/gudang name
+		itemName := ""
+		gudangName := ""
+		if len(list) > 0 {
+			itemName = list[0].ItemName
+			gudangName = list[0].Gudang
+		} else if len(groupMapBefore[k]) > 0 {
+			itemName = groupMapBefore[k][0].ItemName
+			gudangName = groupMapBefore[k][0].Gudang
+		}
+
+		// Generate rows with opening balance info attached to first row
+		rows, _, _ := runMovingAverage(beginQty, beginCost, list)
+
+		// Attach opening balance to first row (or create one if no transactions)
+		if len(rows) > 0 {
+			rows[0].SaldoAwalQty = beginQty
+			rows[0].SaldoAwalNilai = beginCost
+		} else if beginQty > 0 || beginCost > 0 {
+			// No transactions in period but has opening balance - create a marker row
+			rows = append(rows, invMutasiRow{
+				Tanggal:        start,
+				Sumber:         "",
+				Nomor:          "",
+				ItemCode:       k.item,
+				ItemName:       itemName,
+				GudangID:       k.gudang,
+				GudangName:     gudangName,
+				QtyMasuk:       0,
+				QtyKeluar:      0,
+				Harga:          0,
+				SaldoQty:       beginQty,
+				SaldoNilai:     beginCost,
+				Keterangan:     "",
+				SaldoAwalQty:   beginQty,
+				SaldoAwalNilai: beginCost,
+			})
+		}
+
+		allRows = append(allRows, rows...)
+	}
+
+	// Sort all rows by date
+	sort.Slice(allRows, func(i, j int) bool {
+		if allRows[i].Tanggal.Equal(allRows[j].Tanggal) {
+			if allRows[i].Sumber == allRows[j].Sumber {
+				return allRows[i].Nomor < allRows[j].Nomor
+			}
+			if allRows[i].Sumber == "Saldo Awal" {
+				return true
+			}
+			if allRows[j].Sumber == "Saldo Awal" {
+				return false
+			}
+			if allRows[i].Sumber == "Pembelian" && allRows[j].Sumber == "Penjualan" {
+				return true
+			}
+			if allRows[i].Sumber == "Penjualan" && allRows[j].Sumber == "Pembelian" {
+				return false
+			}
+			return allRows[i].Sumber < allRows[j].Sumber
+		}
+		return allRows[i].Tanggal.Before(allRows[j].Tanggal)
+	})
+
+	c.JSON(http.StatusOK, gin.H{"data": allRows})
 }

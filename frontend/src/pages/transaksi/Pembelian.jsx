@@ -46,7 +46,7 @@ export default function Pembelian() {
 
   // column resize state & handlers
   const [columnWidths, setColumnWidths] = useState({
-    kodeItem: 100, namaItem: 220, qty: 80, unit: 80, price: 100, tax: 220, discAmount: 100, dpp: 120, total: 100, aksi: 80
+    kodeItem: 100, namaItem: 220, qty: 80, unit: 80, price: 100, tax: 165, discAmount: 100, dpp: 120, total: 100, aksi: 80
   });
   const resizingRef = React.useRef(null);
 
@@ -710,8 +710,8 @@ export default function Pembelian() {
                 </Button>
               </div>
 
-              <div className="overflow-x-auto max-w-full rounded-lg border min-w-max" style={{ borderColor: theme.cardBorderColor }}>
-                <table className="w-full border-collapse whitespace-nowrap text-xs" style={{ fontFamily: theme.tableFontFamily }}>
+              <div className="overflow-x-auto rounded-lg border" style={{ borderColor: theme.cardBorderColor }}>
+                <table className="w-full border-collapse whitespace-nowrap text-xs" style={{ fontFamily: theme.tableFontFamily, minWidth: 'max-content' }}>
                   <thead style={{ background: theme.tableHeaderColor, color: theme.tableFontColor }}>
                     <tr>
                       <th className="border px-2 py-1" style={{ position: 'relative', width: columnWidths.kodeItem }}>Kode Item
@@ -738,9 +738,9 @@ export default function Pembelian() {
                         <div onMouseDown={e => startResize('tax', e)} style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize' }} />
                       </th>
                       <th className="border px-2 py-1" style={{ position: 'relative', width: 100 }}>Gudang</th>
-                      <th className="border px-2 py-1 text-right" style={{ position: 'relative', width: 90 }}>Tax Amount 1</th>
-                      <th className="border px-2 py-1 text-right" style={{ position: 'relative', width: 90 }}>Tax Amount 2</th>
-                      <th className="border px-2 py-1 text-right" style={{ position: 'relative', width: 90 }}>Tax Amount 3</th>
+                      <th className="border px-2 py-1 text-right" style={{ position: 'relative', width: 90, display: 'none' }}>Tax Amount 1</th>
+                      <th className="border px-2 py-1 text-right" style={{ position: 'relative', width: 90, display: 'none' }}>Tax Amount 2</th>
+                      <th className="border px-2 py-1 text-right" style={{ position: 'relative', width: 90, display: 'none' }}>Tax Amount 3</th>
                       <th className="border px-2 py-1 text-right" style={{ position: 'relative', width: columnWidths.dpp }}>
                         DPP
                         <div onMouseDown={e => startResize('dpp', e)} style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize' }} />
@@ -947,13 +947,13 @@ export default function Pembelian() {
                           </select>
                         </td>
 
-                        <td className="border px-2 py-1 text-right" style={{ width: 90 }}>
+                        <td className="border px-2 py-1 text-right" style={{ width: 90, display: 'none' }}>
                           { (item.taxamount1 || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
                         </td>
-                        <td className="border px-2 py-1 text-right" style={{ width: 90 }}>
+                        <td className="border px-2 py-1 text-right" style={{ width: 90, display: 'none' }}>
                           { (item.taxamount2 || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
                         </td>
-                        <td className="border px-2 py-1 text-right" style={{ width: 90 }}>
+                        <td className="border px-2 py-1 text-right" style={{ width: 90, display: 'none' }}>
                           { (item.taxamount3 || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
                         </td>
                         
@@ -995,20 +995,6 @@ export default function Pembelian() {
                       className="px-2 py-1 rounded border text-sm"
                       style={{background: theme.fieldColor, color: theme.fontColor, fontFamily: theme.fontFamily, borderColor: theme.dropdownColor, minWidth: 180}}
                     />
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm" style={{color: theme.fontColor}}>Gudang:</span>
-                      <select
-                        value={formData.gudang}
-                        onChange={e => setFormData(prev => ({...prev, gudang: e.target.value}))}
-                        className="px-2 py-1 rounded border text-sm"
-                        style={{background: theme.fieldColor, color: theme.fontColor, fontFamily: theme.fontFamily, borderColor: theme.dropdownColor, minWidth: 120}}
-                      >
-                        <option value="">Pilih Gudang</option>
-                        {masterGudang.map(g => (
-                          <option key={g.id} value={g.id}>{g.nama}</option>
-                        ))}
-                      </select>
-                    </div>
                   </div>
                   <div className="overflow-x-auto mb-4">
                     <table className="min-w-max w-full border-collapse text-xs" style={{fontFamily: theme.tableFontFamily}}>
@@ -1017,8 +1003,6 @@ export default function Pembelian() {
                           <th className="px-1 py-1 text-center font-bold border" style={{borderColor: theme.cardBorderColor, fontSize: '0.95em'}}>#</th>
                           <th className="px-1 py-1 text-center font-bold border" style={{borderColor: theme.cardBorderColor, fontSize: '0.95em'}}>Kode Item</th>
                           <th className="px-1 py-1 text-center font-bold border" style={{borderColor: theme.cardBorderColor, fontSize: '0.95em'}}>Deskripsi</th>
-                          <th className="px-1 py-1 text-center font-bold border" style={{borderColor: theme.cardBorderColor, fontSize: '0.95em'}}>Gudang</th>
-                          <th className="px-1 py-1 text-center font-bold border" style={{borderColor: theme.cardBorderColor, fontSize: '0.95em'}}>Stock</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1040,8 +1024,6 @@ export default function Pembelian() {
                             </td>
                             <td className="px-1 py-1 text-center border" style={{borderColor: theme.cardBorderColor}}>{item.kode}</td>
                             <td className="px-1 py-1 border" style={{borderColor: theme.cardBorderColor}}>{item.nama}</td>
-                            <td className="px-1 py-1 text-center border" style={{borderColor: theme.cardBorderColor}}>{masterGudang.find(g => String(g.id) === String(formData.gudang))?.nama || '-'}</td>
-                            <td className="px-1 py-1 text-center border" style={{borderColor: theme.cardBorderColor}}>{item.stock || 0}</td>
                           </tr>
                         ))}
                       </tbody>

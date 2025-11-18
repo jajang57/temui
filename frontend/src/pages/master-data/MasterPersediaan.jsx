@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Box, Button, Typography } from "@mui/material";
+import { Box, Button, Typography, Paper, TableContainer, Table, TableHead, TableBody, TableRow, TableCell } from "@mui/material";
 import { DataGrid, GridToolbarQuickFilter } from "@mui/x-data-grid";
+import { useReactTable, getCoreRowModel, flexRender } from "@tanstack/react-table";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import Select from "react-select";
@@ -253,7 +254,7 @@ export default function MasterPersediaan() {
     },
   };
 
-  // Kolom Mutasi: pakai saldoQtyLocal jika ada
+  // Kolom Mutasi
   const mutasiColumns = [
     {
       field: "id",
@@ -262,20 +263,32 @@ export default function MasterPersediaan() {
       sortable: false,
       filterable: false,
       renderCell: (p) => {
-        if (isGHeader(p)) return p?.row?.gudangName || "";
-        if (isIHeader(p)) return p?.row?.itemLabel || "";
+        if (isGHeader(p)) return null;
+        if (isIHeader(p)) return "";
         if (isITotal(p))  return "";
         return p?.value;
       },
-      colSpan: (p) => (isAnyHdr(p) ? 4 : isITotal(p) ? 0 : 1),
     },
     {
       field: "tanggal",
       headerName: "Tanggal",
-      width: 120,
+      width: 600, // Lebar untuk warehouse header
       type: "date",
       renderCell: (p) => {
-        if (isAnyHdr(p) || isITotal(p)) return "";
+        if (isGHeader(p)) {
+          return (
+            <div style={{ 
+              fontWeight: 700, 
+              fontSize: '1.1em',
+              color: '#1976d2',
+              padding: '8px 0',
+            }}>
+              {p?.row?.keterangan || ""}
+            </div>
+          );
+        }
+        if (isIHeader(p)) return "";
+        if (isITotal(p)) return "";
         if (!p?.value) return "-";
         const d = new Date(p.value);
         if (isNaN(d)) return String(p.value);
@@ -288,33 +301,61 @@ export default function MasterPersediaan() {
         if (isNaN(d)) return String(v);
         return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
       },
-      colSpan: (p) => (rowType(p) ? 0 : 1),
       filterOperators: [mutasiDateBetweenOperator],
     },
     { field: "sumber", headerName: "Sumber", width: 130,
       renderCell: (p) => (rowType(p) ? "" : p?.value),
-      colSpan: (p) => (rowType(p) ? 0 : 1),
     },
     { field: "nomor", headerName: "Nomor", width: 180,
       renderCell: (p) => (rowType(p) ? "" : p?.value),
-      colSpan: (p) => (rowType(p) ? 0 : 1),
     },
     { field: "gudangName", headerName: "Gudang", width: 160,
-      renderCell: (p) => (rowType(p) ? "" : p?.value),
-      colSpan: (p) => (isAnyHdr(p) ? 0 : 1),
+      renderCell: (p) => {
+        if (isGHeader(p)) return "";
+        if (isIHeader(p)) {
+          return <div style={{ fontWeight: 600 }}>{p?.row?.itemLabel || ""}</div>;
+        }
+        return p?.value || "";
+      },
     },
     { field: "qtyMasuk",  headerName: "Qty Masuk", width: 120, type: "number",
-      renderCell: (p) => (isAnyHdr(p) ? "" : fmtNum(p?.value)) },
+      renderCell: (p) => {
+        if (isGHeader(p)) return "";
+        if (isIHeader(p)) {
+          const openQty = p?.row?.saldoAwalQty || 0;
+          return openQty > 0 ? <span style={{ fontStyle: 'italic', color: '#666' }}>{fmtNum(openQty)}</span> : "";
+        }
+        return isITotal(p) ? "" : fmtNum(p?.value);
+      },
+    },
     { field: "qtyKeluar", headerName: "Qty Keluar", width: 120, type: "number",
-      renderCell: (p) => (isAnyHdr(p) ? "" : fmtNum(p?.value)) },
+      renderCell: (p) => (isAnyHdr(p) ? "" : fmtNum(p?.value)),
+    },
     { field: "harga",     headerName: "Harga",     width: 120, type: "number",
-      renderCell: (p) => (isAnyHdr(p) ? "" : fmtNum(p?.value)) },
+      renderCell: (p) => (isAnyHdr(p) ? "" : fmtNum(p?.value)),
+    },
     { field: "saldoQty",  headerName: "Saldo Qty",  width: 120, type: "number",
-      renderCell: (p) => (isAnyHdr(p) ? "" : fmtNum(p?.row?.saldoQtyLocal ?? p?.value)) },
+      renderCell: (p) => (isAnyHdr(p) ? "" : fmtNum(p?.value)),
+    },
     { field: "saldoNilai", headerName: "Saldo Nilai", width: 140, type: "number",
-      renderCell: (p) => (isAnyHdr(p) ? "" : fmtNum(p?.value)) },
+      renderCell: (p) => {
+        if (isGHeader(p)) return "";
+        if (isIHeader(p)) {
+          const openNilai = p?.row?.saldoAwalNilai || 0;
+          return openNilai > 0 ? <span style={{ fontStyle: 'italic', color: '#666' }}>{fmtNum(openNilai)}</span> : "";
+        }
+        return fmtNum(p?.value);
+      },
+    },
     { field: "keterangan", headerName: "Keterangan", width: 260,
-      renderCell: (p) => (rowType(p) ? (p?.row?.keterangan || "") : (p?.value || "")) },
+      renderCell: (p) => {
+        if (isGHeader(p)) return "";
+        if (isIHeader(p)) {
+          return <span style={{ fontStyle: 'italic', color: '#888' }}>(Saldo Awal)</span>;
+        }
+        return p?.value || "";
+      },
+    },
   ];
 
   // ---------- GROUPED VIEW (Summary) ----------
@@ -402,12 +443,13 @@ export default function MasterPersediaan() {
       const [gid, gname] = gkey.split("|");
 
       // Header Gudang
-      out.push({
+      const gudangHeader = {
         id: `g-${gkey}`,
         type: "gheader",
-        gudangName: `Gudang: ${gname || gid}`,
-        keterangan: `Ringkasan Gudang`,
-      });
+        gudangName: gname || gid,
+        keterangan: `Gudang: ${gname || gid}`,
+      };
+      out.push(gudangHeader);
 
       // per item
       for (const [ikey, list] of byItem) {
@@ -415,39 +457,48 @@ export default function MasterPersediaan() {
         // urutkan tanggal
         list.sort((a,b) => new Date(a.tanggal) - new Date(b.tanggal));
 
-        // hitung ulang running saldo per item
-        let runningQty = 0;
+        // Ambil opening balance dari row pertama (jika ada)
+        const openingQty = list[0]?.saldoAwalQty || 0;
+        const openingNilai = list[0]?.saldoAwalNilai || 0;
+
+        // Gunakan saldo dari backend (sudah include opening balance)
         let sumIn = 0, sumOut = 0;
 
         out.push({
           id: `i-${gkey}-${ikey}`,
           type: "iheader",
           itemLabel: `${iname || icode || "-"}`,
+          saldoAwalQty: openingQty,      // Opening balance untuk header
+          saldoAwalNilai: openingNilai,  // Opening balance untuk header
         });
 
         let i = 1;
         for (const r of list) {
           const masuk = Number(r.qtyMasuk || 0);
           const keluar = Number(r.qtyKeluar || 0);
-          sumIn += masuk;
-          sumOut += keluar;
-          runningQty += masuk - keluar;
+          
+          // Hitung total in/out, tapi skip baris "Saldo Awal"
+          if (r.sumber !== "Saldo Awal") {
+            sumIn += masuk;
+            sumOut += keluar;
+          }
 
           out.push({
             ...r,
             id: r.id || `${gkey}-${icode}-${r.tanggal}-${i++}`,
-            saldoQtyLocal: runningQty, // gunakan saldo lokal per item
+            // Gunakan saldoQty dari backend yang sudah benar
           });
         }
 
-        // total per item (pakai runningQty terakhir)
+        // total per item (ambil saldo terakhir dari backend)
+        const lastRow = list.at(-1);
         out.push({
           id: `t-${gkey}-${ikey}`,
           type: "itotal",
           qtyMasuk: sumIn,
           qtyKeluar: sumOut,
-          saldoQty: runningQty,      // ditampilkan via renderer kolom
-          saldoNilai: list.at(-1)?.saldoNilai ?? 0, // biarkan nilai dari API
+          saldoQty: lastRow?.saldoQty ?? 0,
+          saldoNilai: lastRow?.saldoNilai ?? 0,
         });
       }
     }
@@ -506,29 +557,160 @@ export default function MasterPersediaan() {
 
       {error && <div className="alert alert-danger" style={{ marginBottom: 8 }}>{error}</div>}
 
-      <div style={{ width: "100%" }}>
-        <DataGrid
-          rows={rows}
-          columns={columns}
-          getRowClassName={rowClass}
-          filterModel={filterModel}
-          onFilterModelChange={setFilterModel}
-          disableRowSelectionOnClick
-          slots={{ toolbar: GridToolbarQuickFilter }}
-          slotProps={{ toolbar: { quickFilterProps: { debounceMs: 400 }, showQuickFilter: true } }}
-          sx={{
-            background: "var(--card-bg, #fff)",
-            borderRadius: 2,
-            boxShadow: 2,
-            "& .MuiDataGrid-columnHeaders": { background: "#e0e7ff" },
-            "& .row-gheader .MuiDataGrid-cell": { fontWeight: 700, background: "#f3f4f6" },
-            "& .row-iheader .MuiDataGrid-cell": { fontWeight: 600, background: "#fafafa" },
-            "& .row-gtotal .MuiDataGrid-cell": { fontWeight: 800, borderTop: "2px solid #ddd", background: "#fdfdfd" },
-          }}
-          pagination={false}
-          hideFooterPagination
-        />
-      </div>
+      {tab === "summary" ? (
+        <div style={{ width: "100%" }}>
+          <DataGrid
+            rows={summaryDisplayRows}
+            columns={summaryColumns}
+            getRowClassName={rowClass}
+            filterModel={filterModel}
+            onFilterModelChange={setFilterModel}
+            disableRowSelectionOnClick
+            slots={{ toolbar: GridToolbarQuickFilter }}
+            slotProps={{ toolbar: { quickFilterProps: { debounceMs: 400 }, showQuickFilter: true } }}
+            sx={{
+              background: "var(--card-bg, #fff)",
+              borderRadius: 2,
+              boxShadow: 2,
+              "& .MuiDataGrid-columnHeaders": { background: "#e0e7ff" },
+              "& .row-gheader": { 
+                background: "#e3f2fd !important",
+              },
+              "& .row-gheader .MuiDataGrid-cell": { 
+                background: "#e3f2fd !important",
+                borderBottom: "2px solid #90caf9 !important",
+              },
+              "& .row-iheader .MuiDataGrid-cell": { fontWeight: 600, background: "#fafafa" },
+              "& .row-gtotal .MuiDataGrid-cell": { fontWeight: 800, borderTop: "2px solid #ddd", background: "#fdfdfd" },
+            }}
+            pagination={false}
+            hideFooterPagination
+          />
+        </div>
+      ) : (
+        <MutasiTable data={mutasiDisplayRows} />
+      )}
     </Box>
+  );
+}
+
+// TanStack Table Component for Mutasi
+function MutasiTable({ data }) {
+  const columns = useMemo(() => [
+    { accessorKey: "rowNo", header: "No", size: 70 },
+    { accessorKey: "tanggal", header: "Tanggal", size: 120 },
+    { accessorKey: "sumber", header: "Sumber", size: 130 },
+    { accessorKey: "nomor", header: "Nomor", size: 180 },
+    { accessorKey: "gudangName", header: "Gudang", size: 160 },
+    { accessorKey: "qtyMasuk", header: "Qty Masuk", size: 120 },
+    { accessorKey: "qtyKeluar", header: "Qty Keluar", size: 120 },
+    { accessorKey: "harga", header: "Harga", size: 120 },
+    { accessorKey: "saldoQty", header: "Saldo Qty", size: 120 },
+    { accessorKey: "saldoNilai", header: "Saldo Nilai", size: 140 },
+    { accessorKey: "keterangan", header: "Keterangan", size: 260 },
+  ], []);
+
+  const table = useReactTable({
+    data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
+  const fmtNum = (n) => Number(n || 0).toLocaleString("id-ID", { maximumFractionDigits: 2 });
+  const fmtDate = (d) => {
+    if (!d) return "-";
+    const dt = new Date(d);
+    if (isNaN(dt)) return String(d);
+    return `${String(dt.getDate()).padStart(2,'0')}-${String(dt.getMonth()+1).padStart(2,'0')}-${dt.getFullYear()}`;
+  };
+
+  return (
+    <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: 2 }}>
+      <Table size="small">
+        <TableHead>
+          <TableRow sx={{ background: "#e0e7ff" }}>
+            {table.getHeaderGroups().map(headerGroup => (
+              headerGroup.headers.map(header => {
+                const isNumeric = ['qtyMasuk', 'qtyKeluar', 'harga', 'saldoQty', 'saldoNilai'].includes(header.column.id);
+                return (
+                  <TableCell key={header.id} sx={{ fontWeight: 700 }} align={isNumeric ? "right" : "left"}>
+                    {flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableCell>
+                );
+              })
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {table.getRowModel().rows.map(row => {
+            const rowData = row.original;
+            const isGHeader = rowData.type === "gheader";
+            const isIHeader = rowData.type === "iheader";
+            const isITotal = rowData.type === "itotal";
+
+            if (isGHeader) {
+              return (
+                <TableRow key={row.id} sx={{ background: "#e3f2fd" }}>
+                  <TableCell colSpan={11} sx={{ fontWeight: 700, fontSize: '1.1em', color: '#1976d2', borderBottom: '2px solid #90caf9' }}>
+                    {rowData.keterangan}
+                  </TableCell>
+                </TableRow>
+              );
+            }
+
+            if (isIHeader) {
+              return (
+                <TableRow key={row.id} sx={{ background: "#fafafa" }}>
+                  <TableCell colSpan={3} sx={{ fontWeight: 600, paddingLeft: '30px' }} align="left">{rowData.itemLabel}</TableCell>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell align="right" sx={{ fontStyle: 'italic', color: '#666' }}>{rowData.saldoAwalQty > 0 ? fmtNum(rowData.saldoAwalQty) : ""}</TableCell>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell align="right" sx={{ fontStyle: 'italic', color: '#666' }}>{rowData.saldoAwalNilai > 0 ? fmtNum(rowData.saldoAwalNilai) : ""}</TableCell>
+                  <TableCell sx={{ fontStyle: 'italic', color: '#888' }}>(Saldo Awal)</TableCell>
+                </TableRow>
+              );
+            }
+
+            if (isITotal) {
+              return (
+                <TableRow key={row.id} sx={{ background: "#fce4ec" }}>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>{fmtNum(rowData.saldoQty)}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>{fmtNum(rowData.saldoNilai)}</TableCell>
+                  <TableCell></TableCell>
+                </TableRow>
+              );
+            }
+
+            // Regular row
+            return (
+              <TableRow key={row.id}>
+                <TableCell>{rowData.rowNo}</TableCell>
+                <TableCell>{fmtDate(rowData.tanggal)}</TableCell>
+                <TableCell>{rowData.sumber}</TableCell>
+                <TableCell>{rowData.nomor}</TableCell>
+                <TableCell>{rowData.gudangName}</TableCell>
+                <TableCell align="right">{fmtNum(rowData.qtyMasuk)}</TableCell>
+                <TableCell align="right">{fmtNum(rowData.qtyKeluar)}</TableCell>
+                <TableCell align="right">{fmtNum(rowData.harga)}</TableCell>
+                <TableCell align="right">{fmtNum(rowData.saldoQty)}</TableCell>
+                <TableCell align="right">{fmtNum(rowData.saldoNilai)}</TableCell>
+                <TableCell>{rowData.keterangan}</TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 }
