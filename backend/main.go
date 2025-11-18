@@ -6,6 +6,7 @@ import (
 	"project-akuntansi-backend/config"
 	"project-akuntansi-backend/handlers"
 	"project-akuntansi-backend/models"
+	"strings"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -82,20 +83,29 @@ func main() {
 
 	r := gin.Default()
 
-	// Konfigurasi CORS yang lebih permissive untuk debugging
+	// Konfigurasi CORS dengan AllowOriginFunc untuk wildcard vercel.app
 	config := cors.Config{
-		AllowOrigins: []string{
-			"http://localhost:3000",
-			"http://localhost:3001",
-			"http://localhost:5173",
-			"http://127.0.0.1:3000",
-			"http://127.0.0.1:3001",
-			"http://127.0.0.1:5173",
-			"https://temui.vercel.app",
-			"https://temui-5bpq.vercel.app", // Old preview URL
-			"https://temui-5hga.vercel.app", // Current preview URL
-			"https://temui-git-master-jajang57s-projects.vercel.app",
-			"https://temui-production.up.railway.app",
+		AllowOriginFunc: func(origin string) bool {
+			// Allow localhost
+			if strings.HasPrefix(origin, "http://localhost:") ||
+				strings.HasPrefix(origin, "http://127.0.0.1:") {
+				return true
+			}
+			// Allow all vercel.app subdomains
+			if strings.HasSuffix(origin, ".vercel.app") {
+				return true
+			}
+			// Allow specific domains
+			allowedDomains := []string{
+				"https://temui.vercel.app",
+				"https://temui-production.up.railway.app",
+			}
+			for _, domain := range allowedDomains {
+				if origin == domain {
+					return true
+				}
+			}
+			return false
 		},
 		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowHeaders: []string{
