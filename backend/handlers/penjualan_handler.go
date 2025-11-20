@@ -702,3 +702,25 @@ func GenerateSalesGLLines(db *gorm.DB, penjualan models.Penjualan) ([]models.GL,
 
 	return gls, nil
 }
+
+// GetPenjualanListWithCustomer - menambahkan handler untuk mengambil daftar penjualan dengan informasi pelanggan
+func (h *PenjualanHandler) GetPenjualanListWithCustomer(c *gin.Context) {
+	type PenjualanListItem struct {
+		ID           uint    `json:"id"`
+		NomorInvoice string  `json:"nomorInvoice"`
+		Total        float64 `json:"total"`
+		CustomerID   uint    `json:"customerId"`
+		NamaCustomer string  `json:"namaCustomer"`
+	}
+
+	var results []PenjualanListItem
+	query := `SELECT p.id, p.nomor_invoice, p.total, p.customer_id, c.nama AS nama_customer
+		       FROM penjualan p
+		       LEFT JOIN master_pembeli c ON p.customer_id = c.id
+		       ORDER BY p.id DESC`
+	if err := h.DB.Raw(query).Scan(&results).Error; err != nil {
+		c.JSON(500, gin.H{"error": "Gagal ambil data penjualan"})
+		return
+	}
+	c.JSON(200, results)
+}

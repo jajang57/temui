@@ -238,6 +238,7 @@ func main() {
 		api.POST("/penjualan", penjualanHandler.CreatePenjualan)
 		api.PUT("/penjualan/:id", penjualanHandler.UpdatePenjualan)
 		api.DELETE("/penjualan/:id", penjualanHandler.DeletePenjualan)
+		api.GET("/penjualan/list-with-customer", penjualanHandler.GetPenjualanListWithCustomer)
 		api.GET("/penjualan/nomor/:nomor", penjualanHandler.GetPenjualanByNomor)
 		api.PATCH("/penjualan/:id/status", penjualanHandler.UpdatePenjualanStatus)
 		api.GET("/penjualan/report", penjualanHandler.GetPenjualanReport)

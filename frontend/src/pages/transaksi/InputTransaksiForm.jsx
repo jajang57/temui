@@ -41,6 +41,33 @@ function parseFormattedNumber(value) {
 }
 
 const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
+      // State untuk search dan pagination
+      const [searchText, setSearchText] = useState("");
+      const [currentPage, setCurrentPage] = useState(1);
+      const pageSize = 20;
+    // Fungsi ketika user klik tombol Pilih pada baris penjualan
+        // Fungsi ketika user klik tombol Pilih pada baris pembelian
+        const handlePilihPembelian = (item) => {
+          setForm(prev => ({
+            ...prev,
+            deskripsi: `Pembayaran Pembelian ${item.nomorInvoice}`,
+            kredit: item.total ? item.total.toString() : "",
+            debit: ""
+          }));
+          setFormattedKredit(item.total ? formatNumberWithCommas(item.total) : "");
+          setShowSummaryPopup(false);
+        };
+    const handlePilihPenjualan = (item) => {
+      // Isi deskripsi dan debit otomatis
+      setForm(prev => ({
+        ...prev,
+        deskripsi: `Pembayaran Penjualan ${item.nomorInvoice}`,
+        debit: item.total ? item.total.toString() : "",
+        kredit: ""
+      }));
+      setFormattedDebit(item.total ? formatNumberWithCommas(item.total) : "");
+      setShowSummaryPopup(false);
+    };
   const { user } = useAuth(); // ✅ FIXED: Add this line
   const { theme } = useTheme(); // tambahkan ini
 
@@ -65,6 +92,10 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
   const [isGeneratingNoTransaksi, setIsGeneratingNoTransaksi] = useState(false);
   const [formattedDebit, setFormattedDebit] = useState("");
   const [formattedKredit, setFormattedKredit] = useState("");
+  const [showSummaryPopup, setShowSummaryPopup] = useState(false);
+  const [summaryData, setSummaryData] = useState(null);
+  const [loadingSummary, setLoadingSummary] = useState(false);
+  const [summaryType, setSummaryType] = useState(""); // "penjualan" atau "pembelian"
 
   // ✅ FIXED: Fetch master project data
   useEffect(() => {
@@ -322,6 +353,61 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
   const isAkunTransaksiKasBank = (kodeAkun) => {
     const akunTransaksi = masterCoaList.find(coa => String(coa.kode) === String(kodeAkun));
     return akunTransaksi && akunTransaksi.masterCategoryCOA && akunTransaksi.masterCategoryCOA.isKasBank;
+  };
+
+  // Fungsi untuk fetch summary penjualan
+    // Reset search & page saat popup dibuka
+    useEffect(() => {
+      if (showSummaryPopup) {
+        setSearchText("");
+        setCurrentPage(1);
+      }
+    }, [showSummaryPopup]);
+  const fetchSummaryPenjualan = async () => {
+    setLoadingSummary(true);
+    setSummaryType("penjualan");
+    try {
+      const response = await api.get("/penjualan/list-with-customer");
+      const penjualanData = response.data || [];
+      setSummaryData({
+        list: penjualanData
+      });
+      setShowSummaryPopup(true);
+    } catch (error) {
+      console.error("Error fetching penjualan:", error);
+      alert("Gagal mengambil data penjualan!");
+    } finally {
+      setLoadingSummary(false);
+    }
+  };
+
+  // Fungsi untuk fetch summary pembelian
+  const fetchSummaryPembelian = async () => {
+    setLoadingSummary(true);
+    setSummaryType("pembelian");
+    try {
+      // Ganti endpoint jika perlu, pastikan response sudah ada supplierNama
+      const response = await api.get("/pembelian");
+      // Jika response langsung array, gunakan response.data
+      const pembelianData = Array.isArray(response.data) ? response.data : (response.data.data || []);
+      // Map agar field konsisten dengan penjualan
+      const mapped = pembelianData.map(item => ({
+        id: item.id,
+        nomorInvoice: item.nomorapinvoice || item.nomorInvoice,
+        total: item.total,
+        namaPemasok: item.supplierNama || item.namaPemasok || "-",
+        supplierId: item.supplierId
+      }));
+      setSummaryData({
+        list: mapped
+      });
+      setShowSummaryPopup(true);
+    } catch (error) {
+      console.error("Error fetching pembelian:", error);
+      alert("Gagal mengambil data pembelian!");
+    } finally {
+      setLoadingSummary(false);
+    }
   };
 
   // Fungsi untuk generate nomor transaksi untuk akun tukar
@@ -735,25 +821,55 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
             <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
               Akun Transaksi
             </label>
-            <select
-              name="akunTransaksi"
-              value={form.akunTransaksi}
-              onChange={handleChange}
-              className="w-full border rounded px-3 py-2"
-              required
-              style={{
-                background: theme.fieldColor,
-                color: theme.fontColor,
-                fontFamily: theme.fontFamily,
-              }}
-            >
-              <option value="">Pilih Akun Transaksi</option>
-              {akunTransaksiOptions.map(opt => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+            <div className="flex gap-2">
+              <select
+                name="akunTransaksi"
+                value={form.akunTransaksi}
+                onChange={handleChange}
+                className="flex-1 border rounded px-3 py-2"
+                required
+                style={{
+                  background: theme.fieldColor,
+                  color: theme.fontColor,
+                  fontFamily: theme.fontFamily,
+                }}
+              >
+                <option value="">Pilih Akun Transaksi</option>
+                {akunTransaksiOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={fetchSummaryPenjualan}
+                disabled={loadingSummary}
+                className="px-3 py-2 rounded whitespace-nowrap text-sm"
+                style={{
+                  background: loadingSummary ? "#999" : "#10b981",
+                  color: "#fff",
+                  fontFamily: theme.fontFamily,
+                }}
+                title="Lihat Summary Penjualan"
+              >
+                📊 Penjualan
+              </button>
+              <button
+                type="button"
+                onClick={fetchSummaryPembelian}
+                disabled={loadingSummary}
+                className="px-3 py-2 rounded whitespace-nowrap text-sm"
+                style={{
+                  background: loadingSummary ? "#999" : "#ef4444",
+                  color: "#fff",
+                  fontFamily: theme.fontFamily,
+                }}
+                title="Lihat Summary Pembelian"
+              >
+                📊 Pembelian
+              </button>
+            </div>
           </div>
           <div>
             <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
@@ -767,7 +883,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
                 onChange={handleChange}
                 onBlur={handleDebitBlur}
                 onFocus={handleDebitFocus}
-                disabled={form.kredit && form.kredit !== "0"}
+                disabled={form.kredit !== undefined && form.kredit !== null && form.kredit !== "" && form.kredit !== "0"}
                 className="flex-1 border rounded px-3 py-2"
                 placeholder="0"
                 style={{
@@ -909,7 +1025,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
           <button
             type="submit"
             style={{
-              background: isEditMode ? theme.buttonEdit : theme.buttonSimpan,
+              background: isEditMode ? theme.buttonUpdate : theme.buttonSimpan,
               color: "#fff",
               fontFamily: theme.fontFamily,
             }}
@@ -945,6 +1061,199 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
           </button>
         </div>
       </form>
+
+      {/* Summary Popup */}
+      {showSummaryPopup && summaryData && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => setShowSummaryPopup(false)}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-auto"
+            style={{
+              background: theme.backgroundFieldset,
+              color: theme.fontColor,
+              fontFamily: theme.fontFamily,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div 
+              className="sticky top-0 px-6 py-4 border-b flex justify-between items-center"
+              style={{
+                background: summaryType === "penjualan" ? "#10b981" : "#ef4444",
+                color: "#fff",
+              }}
+            >
+              <h2 className="text-xl font-bold">
+                Data {summaryType === "penjualan" ? "Penjualan" : "Pembelian"}
+              </h2>
+              <button
+                onClick={() => setShowSummaryPopup(false)}
+                className="text-2xl hover:opacity-80"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              {/* Search input */}
+              <div className="mb-4 flex items-center gap-2">
+                <input
+                  type="text"
+                  className="border rounded px-3 py-2 w-full"
+                  placeholder="Cari No Transaksi atau Nama Pembeli..."
+                  value={searchText}
+                  onChange={e => { setSearchText(e.target.value); setCurrentPage(1); }}
+                  style={{ fontFamily: theme.fontFamily, background: theme.fieldColor, color: theme.fontColor }}
+                />
+              </div>
+              <div className="overflow-x-auto">
+                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  <table className="w-full border-collapse">
+                    <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                      <tr style={{ background: summaryType === "penjualan" ? "#10b981" : "#ef4444" }}>
+                        <th className="border px-4 py-2 text-left text-white">No</th>
+                        <th className="border px-4 py-2 text-left text-white">No Transaksi</th>
+                        <th className="border px-4 py-2 text-right text-white">Grand Total</th>
+                        <th className="border px-4 py-2 text-left text-white">{summaryType === "penjualan" ? "Nama Pembeli" : "Nama Pemasok"}</th>
+                        <th className="border px-4 py-2 text-center text-white">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        // Filter data
+                        const filtered = summaryData.list ? summaryData.list.filter(item => {
+                          const search = searchText.toLowerCase();
+                          if (summaryType === "penjualan") {
+                            return (
+                              item.nomorInvoice?.toLowerCase().includes(search) ||
+                              (item.namaCustomer || "").toLowerCase().includes(search)
+                            );
+                          } else {
+                            return (
+                              item.nomorInvoice?.toLowerCase().includes(search) ||
+                              (item.namaPemasok || "").toLowerCase().includes(search)
+                            );
+                          }
+                        }) : [];
+                        // Pagination
+                        const totalPages = Math.ceil(filtered.length / pageSize);
+                        const paged = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+                        if (paged.length > 0) {
+                          return paged.map((item, idx) => (
+                            <tr 
+                              key={idx}
+                              style={{
+                                background: idx % 2 === 0 ? theme.fieldColor : theme.backgroundFieldset,
+                                cursor: 'pointer',
+                              }}
+                              className="hover:bg-blue-50"
+                            >
+                              <td className="border px-4 py-2">{(currentPage - 1) * pageSize + idx + 1}</td>
+                              <td className="border px-4 py-2">{item.nomorInvoice}</td>
+                              <td className="border px-4 py-2 text-right font-bold">{formatNumber(item.total)}</td>
+                              <td className="border px-4 py-2">{summaryType === "penjualan" ? (item.namaCustomer || '-') : (item.namaPemasok || '-')}</td>
+                              <td className="border px-4 py-2 text-center">
+                                <button
+                                  className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded"
+                                  onClick={() => summaryType === "penjualan" ? handlePilihPenjualan(item) : handlePilihPembelian(item)}
+                                >
+                                  Pilih
+                                </button>
+                              </td>
+                            </tr>
+                          ));
+                        } else {
+                          return (
+                            <tr>
+                              <td colSpan="5" className="border px-4 py-8 text-center">
+                                Tidak ada data {summaryType}
+                              </td>
+                            </tr>
+                          );
+                        }
+                      })()}
+                    </tbody>
+                    {summaryData.list && summaryData.list.length > 0 && (
+                      <tfoot>
+                        <tr style={{ background: theme.buttonSimpan }}>
+                          <td colSpan="2" className="border px-4 py-2 font-bold text-white text-right">
+                            TOTAL ({summaryData.list.length} transaksi)
+                          </td>
+                          <td className="border px-4 py-2 text-right font-bold text-white">
+                            {formatNumber(
+                              summaryData.list.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0)
+                            )}
+                          </td>
+                          <td className="border px-4 py-2"></td>
+                          <td className="border px-4 py-2"></td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+              {/* Pagination controls */}
+              {summaryData.list && (() => {
+                const filtered = summaryData.list.filter(item => {
+                  const search = searchText.toLowerCase();
+                  return (
+                    item.nomorInvoice?.toLowerCase().includes(search) ||
+                    (item.namaCustomer || "").toLowerCase().includes(search)
+                  );
+                });
+                const totalPages = Math.ceil(filtered.length / pageSize);
+                if (totalPages > 1) {
+                  return (
+                    <div className="flex justify-center items-center gap-2 mt-4">
+                      <button
+                        className="px-3 py-1 rounded bg-gray-200"
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage(currentPage - 1)}
+                      >
+                        &lt;
+                      </button>
+                      <span>
+                        Halaman {currentPage} / {totalPages}
+                      </span>
+                      <button
+                        className="px-3 py-1 rounded bg-gray-200"
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage(currentPage + 1)}
+                      >
+                        &gt;
+                      </button>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+
+            {/* Footer */}
+            <div 
+              className="sticky bottom-0 px-6 py-4 border-t flex justify-end"
+              style={{
+                background: theme.backgroundFieldset,
+              }}
+            >
+              <button
+                onClick={() => setShowSummaryPopup(false)}
+                className="px-6 py-2 rounded"
+                style={{
+                  background: theme.buttonHapus,
+                  color: "#fff",
+                  fontFamily: theme.fontFamily,
+                }}
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 });
