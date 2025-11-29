@@ -1347,12 +1347,25 @@ useEffect(() => {
                               const raw = editingQty[item.id] !== undefined ? editingQty[item.id] : String(item.qty || "");
                               let num = raw === "" ? 0 : parseFloat(String(raw).replace(/,/g, "."));
                               
+
+                              // Cek jenis item dari masterBarangJasa
+                              const barang = masterBarangJasa.find(m => m.kode === item.kodeItem);
+                              if (barang && barang.jenis === "JASA") {
+                                // Jika JASA, tidak perlu cek stock
+                                setItems(prev => {
+                                  const copy = [...prev];
+                                  copy[idx] = { ...copy[idx], qty: Number(Number(num || 0).toFixed(2)) };
+                                  return copy;
+                                });
+                                handleItemChange(idx, 'qty', Number(Number(num || 0).toFixed(2)));
+                                setEditingQty(prev => { const c = { ...prev }; delete c[item.id]; return c; });
+                                return;
+                              }
+
                               // Validasi stock - hitung total qty item yang sama di semua baris
                               const currentItemCode = item.kodeItem;
-                              
                               // Ambil stock dari itemStocks atau dari maxStock yang tersimpan
                               const maxStock = itemStocks[currentItemCode] || item.maxStock || 0;
-                              
                               // Hitung total qty dari baris lain dengan kode item yang sama
                               const otherRowsQty = items.reduce((total, row, i) => {
                                 if (i !== idx && row.kodeItem === currentItemCode) {
@@ -1360,14 +1373,11 @@ useEffect(() => {
                                 }
                                 return total;
                               }, 0);
-                              
                               const availableStock = maxStock - otherRowsQty;
-                              
                               if (num > availableStock) {
                                 alert(`Qty tidak boleh melebihi stock yang tersedia!\nStock total: ${maxStock}\nSudah digunakan: ${otherRowsQty}\nSisa tersedia: ${availableStock}`);
                                 num = availableStock > 0 ? availableStock : 0;
                               }
-                              
                               setItems(prev => {
                                 const copy = [...prev];
                                 copy[idx] = { ...copy[idx], qty: Number(Number(num || 0).toFixed(2)) };
