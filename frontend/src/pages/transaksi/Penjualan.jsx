@@ -333,8 +333,13 @@ useEffect(() => {
 
   const handleSave = async () => {
     if (saving) return;
+    // Validasi wajib pilih customer
+    if (!formData.customer || String(formData.customer).trim() === "") {
+      alert("Harus pilih dulu customer!");
+      return;
+    }
     setSaving(true);
-    
+
     // ✅ SIMPEL: Filter item valid tanpa deduplikasi
     const raw = Array.isArray(items) ? items : [];
     const filtered = raw.filter(d => 
