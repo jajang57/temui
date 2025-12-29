@@ -734,9 +734,9 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
         }}
         onSubmit={handleSubmit}
       >
-        {/* Baris 1: COA Akun Bank & Nomor Transaksi */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
+        {/* Baris 1: COA Akun Bank, Nomor Transaksi, Tanggal */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+          <div className="md:col-span-5">
             <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
               COA Akun Bank
             </label>
@@ -764,7 +764,6 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
               placeholder="Pilih COA Akun Bank"
               isClearable
               isSearchable
-              className="w-full"
               styles={{
                 control: (base) => ({
                   ...base,
@@ -803,7 +802,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
               }}
             />
           </div>
-          <div>
+          <div className="md:col-span-5">
             <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
               Nomor Transaksi
             </label>
@@ -839,91 +838,92 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
               )}
             </div>
           </div>
+          <div className="md:col-span-2">
+            <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+              Tanggal
+            </label>
+            <input
+              type="date"
+              name="tanggal"
+              value={form.tanggal}
+              onChange={handleChange}
+              className="border rounded px-3 py-2 w-full"
+              required
+              style={{
+                background: theme.fieldColor,
+                color: theme.fontColor,
+                fontFamily: theme.fontFamily,
+              }}
+            />
+          </div>
         </div>
 
-        {/* Baris 2: Tanggal, Akun Transaksi, Debit, Kredit */}
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
-          {/* Flex row for Tanggal, Akun Transaksi, Penjualan, Pembelian */}
-          <div className="md:col-span-4 flex items-end gap-2">
-            <div>
-              <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
-                Tanggal
-              </label>
-              <input
-                type="date"
-                name="tanggal"
-                value={form.tanggal}
-                onChange={handleChange}
-                className="border rounded px-3 py-2 w-40"
-                required
-                style={{
+        {/* Baris 2: Akun Transaksi, Button Penjualan, Button Pembelian */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+          <div className="md:col-span-8">
+            <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+              Akun Transaksi
+            </label>
+            <Select
+              name="akunTransaksi"
+              value={akunTransaksiOptions.find(opt => opt.value === form.akunTransaksi)}
+              onChange={(selectedOption) => {
+                setForm({
+                  ...form,
+                  akunTransaksi: selectedOption ? selectedOption.value : ""
+                });
+              }}
+              options={akunTransaksiOptions}
+              placeholder="Pilih Akun Transaksi"
+              isClearable
+              isSearchable
+              styles={{
+                control: (base) => ({
+                  ...base,
                   background: theme.fieldColor,
+                  borderColor: '#d1d5db',
+                  minHeight: '42px',
+                  fontFamily: theme.fontFamily,
+                }),
+                menu: (base) => ({
+                  ...base,
+                  background: theme.fieldColor,
+                  fontFamily: theme.fontFamily,
+                }),
+                option: (base, state) => ({
+                  ...base,
+                  background: state.isFocused ? '#e5e7eb' : theme.fieldColor,
                   color: theme.fontColor,
                   fontFamily: theme.fontFamily,
-                }}
-              />
-            </div>
-            <div>
-              <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
-                Akun Transaksi
-              </label>
-              <Select
-                name="akunTransaksi"
-                value={akunTransaksiOptions.find(opt => opt.value === form.akunTransaksi)}
-                onChange={(selectedOption) => {
-                  setForm({
-                    ...form,
-                    akunTransaksi: selectedOption ? selectedOption.value : ""
-                  });
-                }}
-                options={akunTransaksiOptions}
-                placeholder="Pilih Akun Transaksi"
-                isClearable
-                isSearchable
-                className="w-96"
-                styles={{
-                  control: (base) => ({
-                    ...base,
-                    background: theme.fieldColor,
-                    borderColor: '#d1d5db',
-                    minHeight: '42px',
-                    fontFamily: theme.fontFamily,
-                  }),
-                  menu: (base) => ({
-                    ...base,
-                    background: theme.fieldColor,
-                    fontFamily: theme.fontFamily,
-                  }),
-                  option: (base, state) => ({
-                    ...base,
-                    background: state.isFocused ? '#e5e7eb' : theme.fieldColor,
-                    color: theme.fontColor,
-                    fontFamily: theme.fontFamily,
-                  }),
-                  singleValue: (base) => ({
-                    ...base,
-                    color: theme.fontColor,
-                    fontFamily: theme.fontFamily,
-                  }),
-                  input: (base) => ({
-                    ...base,
-                    color: theme.fontColor,
-                    fontFamily: theme.fontFamily,
-                  }),
-                  placeholder: (base) => ({
-                    ...base,
-                    color: theme.fontColor,
-                    opacity: 0.5,
-                    fontFamily: theme.fontFamily,
-                  }),
-                }}
-              />
-            </div>
+                }),
+                singleValue: (base) => ({
+                  ...base,
+                  color: theme.fontColor,
+                  fontFamily: theme.fontFamily,
+                }),
+                input: (base) => ({
+                  ...base,
+                  color: theme.fontColor,
+                  fontFamily: theme.fontFamily,
+                }),
+                placeholder: (base) => ({
+                  ...base,
+                  color: theme.fontColor,
+                  opacity: 0.5,
+                  fontFamily: theme.fontFamily,
+                }),
+              }}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+              &nbsp;
+            </label>
             <button
               type="button"
               onClick={fetchSummaryPenjualan}
               disabled={loadingSummary}
-              className="px-4 py-2 rounded whitespace-nowrap text-sm w-32 flex-shrink-0"
+              className="px-3 py-2 rounded whitespace-nowrap text-sm w-full"
               style={{
                 background: loadingSummary ? "#999" : "#10b981",
                 color: "#fff",
@@ -933,11 +933,16 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
             >
               📊 Penjualan
             </button>
+          </div>
+          <div className="md:col-span-2">
+            <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+              &nbsp;
+            </label>
             <button
               type="button"
               onClick={fetchSummaryPembelian}
               disabled={loadingSummary}
-              className="px-4 py-2 rounded whitespace-nowrap text-sm w-32 flex-shrink-0"
+              className="px-3 py-2 rounded whitespace-nowrap text-sm w-full"
               style={{
                 background: loadingSummary ? "#999" : "#ef4444",
                 color: "#fff",
@@ -947,95 +952,96 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
             >
               📊 Pembelian
             </button>
-          
-            {/* Debit */}
-            <div>
-              <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
-                Debit
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  name="debit"
-                  value={formattedDebit}
-                  onChange={handleChange}
-                  onBlur={handleDebitBlur}
-                  onFocus={handleDebitFocus}
-                  disabled={form.kredit !== undefined && form.kredit !== null && form.kredit !== "" && form.kredit !== "0"}
-                  className="border rounded px-2 py-2 w-72 flex-1"
-                  placeholder="0"
+          </div>
+        </div>
+
+        {/* Baris 3: Debit & Kredit */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+              Debit
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                name="debit"
+                value={formattedDebit}
+                onChange={handleChange}
+                onBlur={handleDebitBlur}
+                onFocus={handleDebitFocus}
+                disabled={form.kredit !== undefined && form.kredit !== null && form.kredit !== "" && form.kredit !== "0"}
+                className="border rounded px-3 py-2 flex-1"
+                placeholder="0"
+                style={{
+                  background: theme.fieldColor,
+                  color: theme.fontColor,
+                  fontFamily: theme.fontFamily,
+                }}
+              />
+              {form.debit && form.debit !== "0" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm({...form, debit: ""});
+                    setFormattedDebit("");
+                  }}
                   style={{
-                    background: theme.fieldColor,
-                    color: theme.fontColor,
+                    background: theme.buttonHapus,
+                    color: "#fff",
                     fontFamily: theme.fontFamily,
                   }}
-                />
-                {form.debit && form.debit !== "0" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm({...form, debit: ""});
-                      setFormattedDebit("");
-                    }}
-                    style={{
-                      background: theme.buttonHapus,
-                      color: "#fff",
-                      fontFamily: theme.fontFamily,
-                    }}
-                    className="px-2 py-1 rounded text-sm"
-                    title="Clear Debit"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
+                  className="px-2 py-1 rounded text-sm"
+                  title="Clear Debit"
+                >
+                  ✕
+                </button>
+              )}
             </div>
-            {/* Kredit */}
-            <div>
-              <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
-                Kredit
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  name="kredit"
-                  value={formattedKredit}
-                  onChange={handleChange}
-                  onBlur={handleKreditBlur}
-                  onFocus={handleKreditFocus}
-                  disabled={form.debit && form.debit !== "0"}
-                  className="border rounded px-2 py-2 w-72 flex-1"
-                  placeholder="0"
+          </div>
+          <div>
+            <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+              Kredit
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                name="kredit"
+                value={formattedKredit}
+                onChange={handleChange}
+                onBlur={handleKreditBlur}
+                onFocus={handleKreditFocus}
+                disabled={form.debit && form.debit !== "0"}
+                className="border rounded px-3 py-2 flex-1"
+                placeholder="0"
+                style={{
+                  background: theme.fieldColor,
+                  color: theme.fontColor,
+                  fontFamily: theme.fontFamily,
+                }}
+              />
+              {form.kredit && form.kredit !== "0" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm({...form, kredit: ""});
+                    setFormattedKredit("");
+                  }}
                   style={{
-                    background: theme.fieldColor,
-                    color: theme.fontColor,
+                    background: theme.buttonHapus,
+                    color: "#fff",
                     fontFamily: theme.fontFamily,
                   }}
-                />
-                {form.kredit && form.kredit !== "0" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm({...form, kredit: ""});
-                      setFormattedKredit("");
-                    }}
-                    style={{
-                      background: theme.buttonHapus,
-                      color: "#fff",
-                      fontFamily: theme.fontFamily,
-                    }}
-                    className="px-2 py-1 rounded text-sm"
-                    title="Clear Kredit"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
+                  className="px-2 py-1 rounded text-sm"
+                  title="Clear Kredit"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Baris 3: Deskripsi */}
+        {/* Baris 4: Deskripsi */}
         <div>
           <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
             Deskripsi
@@ -1055,7 +1061,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
           />
         </div>
 
-        {/* Baris 4: Project No & Project Name */}
+        {/* Baris 5: Project No & Project Name */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
@@ -1100,7 +1106,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
           </div>
         </div>
 
-        {/* Baris 5: Tombol */}
+        {/* Baris 6: Tombol */}
         <div className="flex gap-2 justify-end mt-4">
           <button
             type="submit"
