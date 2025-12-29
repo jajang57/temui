@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandl
 import api from "../../utils/api";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext"; // pastikan sudah di-import
+import Select from "react-select"; // Import react-select untuk dropdown searchable
 
 // Tambahkan fungsi untuk mendapatkan tanggal hari ini dalam format YYYY-MM-DD
 function getTodayLocal() {
@@ -739,25 +740,68 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
             <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
               COA Akun Bank
             </label>
-            <select
+            <Select
               name="coaAkunBank"
-              value={form.coaAkunBank}
-              onChange={handleChange}
-              className="w-full border rounded px-3 py-2"
-              required
-              style={{
-                background: theme.fieldColor,
-                color: theme.fontColor,
-                fontFamily: theme.fontFamily,
+              value={coaList.map(coa => ({
+                value: coa.id,
+                label: `${coa.kode} - ${coa.nama}`
+              })).find(opt => String(opt.value) === String(form.coaAkunBank))}
+              onChange={(selectedOption) => {
+                const newValue = selectedOption ? selectedOption.value : "";
+                setForm({
+                  ...form,
+                  coaAkunBank: newValue
+                });
+                
+                if (onCOAChange) {
+                  onCOAChange(newValue);
+                }
               }}
-            >
-              <option value="">Pilih COA Akun Bank</option>
-              {coaList.map(coa => (
-                <option key={coa.id} value={coa.id}>
-                  {coa.kode} - {coa.nama}
-                </option>
-              ))}
-            </select>
+              options={coaList.map(coa => ({
+                value: coa.id,
+                label: `${coa.kode} - ${coa.nama}`
+              }))}
+              placeholder="Pilih COA Akun Bank"
+              isClearable
+              isSearchable
+              className="w-full"
+              styles={{
+                control: (base) => ({
+                  ...base,
+                  background: theme.fieldColor,
+                  borderColor: '#d1d5db',
+                  minHeight: '42px',
+                  fontFamily: theme.fontFamily,
+                }),
+                menu: (base) => ({
+                  ...base,
+                  background: theme.fieldColor,
+                  fontFamily: theme.fontFamily,
+                }),
+                option: (base, state) => ({
+                  ...base,
+                  background: state.isFocused ? '#e5e7eb' : theme.fieldColor,
+                  color: theme.fontColor,
+                  fontFamily: theme.fontFamily,
+                }),
+                singleValue: (base) => ({
+                  ...base,
+                  color: theme.fontColor,
+                  fontFamily: theme.fontFamily,
+                }),
+                input: (base) => ({
+                  ...base,
+                  color: theme.fontColor,
+                  fontFamily: theme.fontFamily,
+                }),
+                placeholder: (base) => ({
+                  ...base,
+                  color: theme.fontColor,
+                  opacity: 0.5,
+                  fontFamily: theme.fontFamily,
+                }),
+              }}
+            />
           </div>
           <div>
             <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
@@ -823,26 +867,57 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
               <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
                 Akun Transaksi
               </label>
-              <select
+              <Select
                 name="akunTransaksi"
-                value={form.akunTransaksi}
-                onChange={handleChange}
-                className="border rounded px-2 py-2 w-96"
-                required
-                style={{
-                  background: theme.fieldColor,
-                  color: theme.fontColor,
-                  fontFamily: theme.fontFamily,
-                  marginBottom: 0
+                value={akunTransaksiOptions.find(opt => opt.value === form.akunTransaksi)}
+                onChange={(selectedOption) => {
+                  setForm({
+                    ...form,
+                    akunTransaksi: selectedOption ? selectedOption.value : ""
+                  });
                 }}
-              >
-                <option value="">Pilih Akun Transaksi</option>
-                {akunTransaksiOptions.map(opt => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+                options={akunTransaksiOptions}
+                placeholder="Pilih Akun Transaksi"
+                isClearable
+                isSearchable
+                className="w-96"
+                styles={{
+                  control: (base) => ({
+                    ...base,
+                    background: theme.fieldColor,
+                    borderColor: '#d1d5db',
+                    minHeight: '42px',
+                    fontFamily: theme.fontFamily,
+                  }),
+                  menu: (base) => ({
+                    ...base,
+                    background: theme.fieldColor,
+                    fontFamily: theme.fontFamily,
+                  }),
+                  option: (base, state) => ({
+                    ...base,
+                    background: state.isFocused ? '#e5e7eb' : theme.fieldColor,
+                    color: theme.fontColor,
+                    fontFamily: theme.fontFamily,
+                  }),
+                  singleValue: (base) => ({
+                    ...base,
+                    color: theme.fontColor,
+                    fontFamily: theme.fontFamily,
+                  }),
+                  input: (base) => ({
+                    ...base,
+                    color: theme.fontColor,
+                    fontFamily: theme.fontFamily,
+                  }),
+                  placeholder: (base) => ({
+                    ...base,
+                    color: theme.fontColor,
+                    opacity: 0.5,
+                    fontFamily: theme.fontFamily,
+                  }),
+                }}
+              />
             </div>
             <button
               type="button"
