@@ -9,7 +9,7 @@ import (
 )
 
 func ConnectDB() (*gorm.DB, error) {
-	dsn := "host=localhost user=postgres password=ithITtech dbname=akuntan port=5432 sslmode=disable"
+	dsn := "host=localhost user=postgres password=12Maktab! dbname=akuntan port=5432 sslmode=disable"
 	if os.Getenv("DATABASE_URL") != "" {
 		dsn = os.Getenv("DATABASE_URL")
 		fmt.Printf("Using DATABASE_URL: %s\n", dsn)

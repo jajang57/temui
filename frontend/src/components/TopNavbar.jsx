@@ -255,7 +255,10 @@ export default function TopNavbar({ onToggleSidebar }) {
                     ? "bg-indigo-500 text-white"
                     : "text-gray-700"
                 }`}
-                onClick={() => setOpenDropdown(openDropdown === idx ? null : idx)}
+                onClick={() => {
+                  setOpenDropdown(openDropdown === idx ? null : idx);
+                  setOpenSubDropdown(null); // Tutup subdropdown ketika dropdown baru dibuka
+                }}
               >
                 <span style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
                   {item.name}

@@ -71,8 +71,20 @@ export default function MasterCOA() {
   useEffect(() => {
     api.get("/master-category-coa")
       .then((res) => {
-        // Sort kategori berdasarkan kode ascending
-        const sortedKategori = res.data.sort((a, b) => a.kode.localeCompare(b.kode));
+        // Sort kategori berdasarkan kode ascending (numerik jika angka, alfanumerik jika teks)
+        const sortedKategori = res.data.sort((a, b) => {
+          // Coba convert ke number untuk sorting numerik
+          const aNum = parseInt(a.kode);
+          const bNum = parseInt(b.kode);
+          
+          // Jika keduanya angka, sort sebagai angka
+          if (!isNaN(aNum) && !isNaN(bNum)) {
+            return aNum - bNum;
+          }
+          
+          // Jika bukan angka, sort sebagai string
+          return a.kode.toString().localeCompare(b.kode.toString(), undefined, { numeric: true, sensitivity: 'base' });
+        });
         setKategoriList(sortedKategori);
       })
       .catch(() => setError("Gagal mengambil data kategori COA"));
