@@ -21,6 +21,7 @@ type MasterBarangJasa struct {
 	DiJual       bool           `json:"diJual" gorm:"default:true"`
 	DiBeli       bool           `json:"diBeli" gorm:"default:true"`
 	Image        string         `json:"image" gorm:"type:text"` // Base64 encoded image
+	IsAsetTetap  bool           `json:"isAsetTetap" gorm:"default:false"` // Menandai barang sebagai aset tetap
 	Aktif        bool           `json:"aktif" gorm:"default:true"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`

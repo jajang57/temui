@@ -15,6 +15,7 @@ import MasterPembeli from "./pages/master-data/MasterPembeli";
 import MasterKaryawan from "./pages/master-data/MasterKaryawan";
 import MasterProject from "./pages/master-data/MasterProject";
 import MasterBarangJasa from "./pages/master-data/MasterBarangJasa";
+import MasterAsetTetap from "./pages/master-data/MasterAsetTetap";
 import MasterPersediaan from "./pages/master-data/MasterPersediaan";
 import MasterGudang from "./pages/master-data/MasterGudang";
 import MasterMataUang from "./pages/master-data/MasterMataUang";
@@ -28,6 +29,9 @@ import Pembelian from "./pages/transaksi/Pembelian";
 import Penjualan from "./pages/transaksi/Penjualan";
 import InputTransaksiPage from "./pages/transaksi/InputTransaksiPage";
 import TransaksiGL from "./pages/transaksi/AgGridTransaksiGL";
+import RegistrasiAset from "./pages/aset-tetap/RegistrasiAset";
+import PostingAsetGL from "./pages/aset-tetap/PostingAsetGL";
+import HitungPenyusutan from "./pages/aset-tetap/HitungPenyusutan";
 
 export default function App() {
   return (
@@ -106,6 +110,39 @@ export default function App() {
               <ProtectedRoute>
                 <Layout>
                   <MasterBarangJasa />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/master-data/aset-tetap" element={
+              <ProtectedRoute>
+                <Layout>
+                  <MasterAsetTetap />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/aset-tetap/registrasi" element={
+              <ProtectedRoute>
+                <Layout>
+                  <RegistrasiAset />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/aset-tetap/posting-gl" element={
+              <ProtectedRoute>
+                <Layout>
+                  <PostingAsetGL />
+                </Layout>
+              </ProtectedRoute>
+            } />            <Route path="/aset-tetap/penyusutan" element={
+              <ProtectedRoute>
+                <Layout>
+                  <HitungPenyusutan />
+                </Layout>
+              </ProtectedRoute>
+            } />            <Route path="/aset-tetap/penyusutan" element={
+              <ProtectedRoute>
+                <Layout>
+                  <HitungPenyusutan />
                 </Layout>
               </ProtectedRoute>
             } />

@@ -51,7 +51,8 @@ export default function MasterBarangJasa() {
     diJual: true,
     diBeli: true,
     image: "",
-    aktif: true
+    aktif: true,
+    isAsetTetap: false
   });
   const [data, setData] = useState([]);
   const [error, setError] = useState("");
@@ -330,7 +331,8 @@ export default function MasterBarangJasa() {
       diJual: row.diJual !== false,
       diBeli: row.diBeli !== false,
       image: row.image || "",
-      aktif: row.aktif !== false
+      aktif: row.aktif !== false,
+      isAsetTetap: row.isAsetTetap || false
     });
     setGlAccount({
       persediaan: row.akunPersediaan || "",
@@ -429,7 +431,8 @@ export default function MasterBarangJasa() {
       diJual: true,
       diBeli: true,
       image: "",
-      aktif: true
+      aktif: true,
+      isAsetTetap: false
     });
     setFormattedHargaBeli("");
     setFormattedHargaJual("");
@@ -962,6 +965,23 @@ export default function MasterBarangJasa() {
                   </label>
                 </div>
 
+                {form.jenis === "BARANG" && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      name="isAsetTetap"
+                      checked={form.isAsetTetap}
+                      onChange={handleChange}
+                      id="isAsetTetap"
+                      className="rounded"
+                    />
+                    <label htmlFor="isAsetTetap" className="font-semibold" 
+                           style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+                      🏢 Aset Tetap
+                    </label>
+                  </div>
+                )}
+
                 <div className="md:col-span-2 lg:col-span-3 xl:col-span-4">
                   <label className="block mb-1 font-semibold" 
                          style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
@@ -1198,6 +1218,7 @@ export default function MasterBarangJasa() {
                 <th className="px-3 py-2 font-semibold border-b">Dijual</th>
                 <th className="px-3 py-2 font-semibold border-b">Dibeli</th>
                 <th className="px-3 py-2 font-semibold border-b">Status</th>
+                <th className="px-3 py-2 font-semibold border-b">Aset Tetap</th>
                 <th className="px-3 py-2 font-semibold border-b">Aksi</th>
               </tr>
               <tr>
@@ -1268,7 +1289,7 @@ export default function MasterBarangJasa() {
                     }}
                   />
                 </th>
-                <th colSpan="7" />
+                <th colSpan="8" />
               </tr>
             </thead>
             <tbody>
@@ -1313,6 +1334,13 @@ export default function MasterBarangJasa() {
                     }`}>
                       {row.aktif ? 'Aktif' : 'Nonaktif'}
                     </span>
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    {row.isAsetTetap && (
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                        🏢 Aset
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex gap-2">

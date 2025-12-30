@@ -177,7 +177,7 @@ export default function TrialBalance() {
           fontFamily: theme.fontFamily,
         }}
       >
-        Trial Balance
+        Neraca Saldo
       </Typography>
       {error && <Box color="error.main" mb={2}>{error}</Box>}
       <Grid container spacing={2} mb={2}>

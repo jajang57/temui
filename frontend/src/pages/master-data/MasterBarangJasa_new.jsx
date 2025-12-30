@@ -15,6 +15,7 @@ export default function MasterBarangJasa() {
     hargaJual: "",
     stokMinimal: "",
     deskripsi: "",
+    isAsetTetap: false, // Menandai sebagai aset tetap
     aktif: true
   });
   const [data, setData] = useState([]);
@@ -180,6 +181,7 @@ export default function MasterBarangJasa() {
       hargaJual: row.hargaJual?.toString() || "",
       stokMinimal: row.stokMinimal?.toString() || "",
       deskripsi: row.deskripsi || "",
+      isAsetTetap: row.isAsetTetap || false,
       aktif: row.aktif !== false
     });
     setFormattedHargaBeli(row.hargaBeli ? formatNumber(row.hargaBeli) : "");
@@ -232,6 +234,7 @@ export default function MasterBarangJasa() {
       hargaJual: "",
       stokMinimal: "",
       deskripsi: "",
+      isAsetTetap: false,
       aktif: true
     });
     setFormattedHargaBeli("");
@@ -720,6 +723,23 @@ export default function MasterBarangJasa() {
                 </label>
               </div>
 
+              {form.jenis === "BARANG" && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    name="isAsetTetap"
+                    checked={form.isAsetTetap}
+                    onChange={handleChange}
+                    id="isAsetTetap"
+                    className="rounded"
+                  />
+                  <label htmlFor="isAsetTetap" className="font-semibold" 
+                         style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+                    🏢 Aset Tetap
+                  </label>
+                </div>
+              )}
+
               {error && (
                 <div className="md:col-span-2 lg:col-span-3 xl:col-span-4">
                   <div className="text-red-500 text-sm">{error}</div>
@@ -802,6 +822,7 @@ export default function MasterBarangJasa() {
                 <th className="px-3 py-2 font-semibold border-b">Satuan</th>
                 <th className="px-3 py-2 font-semibold border-b">Harga Beli</th>
                 <th className="px-3 py-2 font-semibold border-b">Harga Jual</th>
+                <th className="px-3 py-2 font-semibold border-b">Aset Tetap</th>
                 <th className="px-3 py-2 font-semibold border-b">Status</th>
                 <th className="px-3 py-2 font-semibold border-b">Aksi</th>
               </tr>
@@ -873,7 +894,7 @@ export default function MasterBarangJasa() {
                     }}
                   />
                 </th>
-                <th colSpan="5" />
+                <th colSpan="6" />
               </tr>
             </thead>
             <tbody>
@@ -897,6 +918,15 @@ export default function MasterBarangJasa() {
                   </td>
                   <td className="px-3 py-2 text-right">
                     {row.hargaJual ? formatNumber(row.hargaJual) : "-"}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    {row.isAsetTetap ? (
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                        🏢 Aset
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${

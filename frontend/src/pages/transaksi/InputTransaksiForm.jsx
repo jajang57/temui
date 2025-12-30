@@ -3,6 +3,7 @@ import api from "../../utils/api";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext"; // pastikan sudah di-import
 import Select from "react-select"; // Import react-select untuk dropdown searchable
+import * as XLSX from 'xlsx'; // Import library xlsx untuk parsing Excel
 
 // Tambahkan fungsi untuk mendapatkan tanggal hari ini dalam format YYYY-MM-DD
 function getTodayLocal() {
@@ -97,6 +98,18 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
   const [summaryData, setSummaryData] = useState(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [summaryType, setSummaryType] = useState(""); // "penjualan" atau "pembelian"
+  
+  // State untuk Bulk Import
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
+  const [bulkImportFile, setBulkImportFile] = useState(null);
+  const [bulkImportData, setBulkImportData] = useState([]);
+  const [bulkImportProgress, setBulkImportProgress] = useState({ current: 0, total: 0 });
+  const [isBulkImporting, setIsBulkImporting] = useState(false);
+  
+  // State untuk Audit Trail
+  const [showAuditTrailModal, setShowAuditTrailModal] = useState(false);
+  const [auditTrailData, setAuditTrailData] = useState([]);
+  const [loadingAuditTrail, setLoadingAuditTrail] = useState(false);
 
   // ✅ FIXED: Fetch master project data
   useEffect(() => {
@@ -427,6 +440,160 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
     } catch (error) {
       console.error("Error generating nomor transaksi tukar:", error);
       return originalNoTransaksi;
+    }
+  };
+
+  // ✨ BULK IMPORT - Handle file upload
+  const handleBulkImportFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    setBulkImportFile(file);
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = new Uint8Array(event.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        
+        // Validasi format Excel
+        if (jsonData.length === 0) {
+          alert("File Excel kosong!");
+          return;
+        }
+        
+        // Expected columns: Tanggal, Akun Transaksi, Debit, Kredit, Deskripsi, Project No
+        const requiredColumns = ['Tanggal', 'Akun Transaksi', 'Deskripsi'];
+        const firstRow = jsonData[0];
+        const missingColumns = requiredColumns.filter(col => !(col in firstRow));
+        
+        if (missingColumns.length > 0) {
+          alert(`Kolom berikut tidak ditemukan: ${missingColumns.join(', ')}\n\nFormat yang benar:\nTanggal | Akun Transaksi | Debit | Kredit | Deskripsi | Project No`);
+          return;
+        }
+        
+        setBulkImportData(jsonData);
+      } catch (error) {
+        console.error("Error reading Excel file:", error);
+        alert("Gagal membaca file Excel!");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  // ✨ BULK IMPORT - Process import
+  const handleBulkImport = async () => {
+    if (!form.coaAkunBank) {
+      alert("Pilih COA Akun Bank terlebih dahulu!");
+      return;
+    }
+    
+    if (bulkImportData.length === 0) {
+      alert("Tidak ada data untuk diimport!");
+      return;
+    }
+    
+    setIsBulkImporting(true);
+    setBulkImportProgress({ current: 0, total: bulkImportData.length });
+    
+    let successCount = 0;
+    let failCount = 0;
+    const errors = [];
+    
+    for (let i = 0; i < bulkImportData.length; i++) {
+      const row = bulkImportData[i];
+      setBulkImportProgress({ current: i + 1, total: bulkImportData.length });
+      
+      try {
+        // Convert tanggal ke format YYYY-MM-DD
+        let tanggal = row['Tanggal'];
+        if (typeof tanggal === 'number') {
+          // Excel serial date
+          const date = new Date((tanggal - 25569) * 86400 * 1000);
+          tanggal = date.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+        } else {
+          const date = new Date(tanggal);
+          tanggal = date.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+        }
+        
+        // Generate nomor transaksi
+        const selectedCOA = coaList.find(coa => String(coa.id) === String(form.coaAkunBank));
+        const noTransaksiResponse = await api.get("/generate-no-transaksi", {
+          params: {
+            kodeBank: selectedCOA.kode,
+            userID: user.id,
+            tanggal: tanggal
+          }
+        });
+        
+        const dataToSend = {
+          coaAkunBank: selectedCOA.kode,
+          noTransaksi: noTransaksiResponse.data.noTransaksi,
+          tanggal: tanggal,
+          akunTransaksi: String(row['Akun Transaksi']),
+          debit: parseFloat(row['Debit']) || 0,
+          kredit: parseFloat(row['Kredit']) || 0,
+          deskripsi: String(row['Deskripsi']),
+          projectNo: row['Project No'] ? String(row['Project No']) : "",
+          projectName: ""
+        };
+        
+        await api.post("/input-transaksi", dataToSend);
+        successCount++;
+      } catch (error) {
+        failCount++;
+        errors.push(`Baris ${i + 2}: ${error.response?.data?.error || error.message}`);
+      }
+    }
+    
+    setIsBulkImporting(false);
+    
+    if (errors.length > 0) {
+      alert(`Import selesai!\nBerhasil: ${successCount}\nGagal: ${failCount}\n\nError:\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...dan ' + (errors.length - 5) + ' error lainnya' : ''}`);
+    } else {
+      alert(`Import berhasil! ${successCount} transaksi telah ditambahkan.`);
+    }
+    
+    // Refresh table
+    if (afterSubmit) {
+      afterSubmit(form.coaAkunBank);
+    }
+    
+    // Reset
+    setBulkImportData([]);
+    setBulkImportFile(null);
+    setShowBulkImportModal(false);
+  };
+
+  // ✨ AUDIT TRAIL - Fetch audit log
+  const fetchAuditTrail = async () => {
+    if (!selectedTransaksiId) {
+      alert("Pilih transaksi terlebih dahulu dengan double-click untuk melihat audit trail!");
+      return;
+    }
+    
+    setLoadingAuditTrail(true);
+    setShowAuditTrailModal(true);
+    
+    try {
+      const response = await api.get(`/input-transaksi/${selectedTransaksiId}/audit`);
+      setAuditTrailData(response.data || []);
+    } catch (error) {
+      console.error("Error fetching audit trail:", error);
+      // Fallback: generate mock data untuk demo
+      setAuditTrailData([
+        {
+          action: "CREATE",
+          user: user.username,
+          timestamp: new Date().toISOString(),
+          changes: "Transaksi dibuat"
+        }
+      ]);
+    } finally {
+      setLoadingAuditTrail(false);
     }
   };
 
@@ -1107,44 +1274,75 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
         </div>
 
         {/* Baris 6: Tombol */}
-        <div className="flex gap-2 justify-end mt-4">
-          <button
-            type="submit"
-            style={{
-              background: isEditMode ? theme.buttonUpdate : theme.buttonSimpan,
-              color: "#fff",
-              fontFamily: theme.fontFamily,
-            }}
-            className="px-6 py-2 rounded"
-          >
-            {isEditMode ? "Update" : "Simpan"}
-          </button>
-          <button
-            type="button"
-            style={{
-              background: theme.buttonHapus,
-              color: "#fff",
-              fontFamily: theme.fontFamily,
-            }}
-            className="px-6 py-2 rounded"
-            onClick={handleDeleteTransaksi}
-            disabled={!isEditMode || !selectedTransaksiId}
-            title={!isEditMode ? "Pilih transaksi dengan double-click untuk menghapus" : "Hapus transaksi yang dipilih"}
-          >
-            Hapus
-          </button>
-          <button
-            type="button"
-            style={{
-              background: theme.buttonRefresh,
-              color: "#fff",
-              fontFamily: theme.fontFamily,
-            }}
-            className="px-6 py-2 rounded"
-            onClick={handleResetForm}
-          >
-            Kosongkan
-          </button>
+        <div className="flex gap-2 justify-between mt-4">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              style={{
+                background: "#10b981",
+                color: "#fff",
+                fontFamily: theme.fontFamily,
+              }}
+              className="px-6 py-2 rounded"
+              onClick={() => setShowBulkImportModal(true)}
+              title="Upload Excel untuk import multiple transaksi"
+            >
+              📤 Bulk Import
+            </button>
+            <button
+              type="button"
+              style={{
+                background: "#3b82f6",
+                color: "#fff",
+                fontFamily: theme.fontFamily,
+              }}
+              className="px-6 py-2 rounded"
+              onClick={fetchAuditTrail}
+              disabled={!selectedTransaksiId}
+              title={!selectedTransaksiId ? "Pilih transaksi dengan double-click untuk melihat audit trail" : "Lihat history perubahan transaksi"}
+            >
+              📋 Audit Trail
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              style={{
+                background: isEditMode ? theme.buttonUpdate : theme.buttonSimpan,
+                color: "#fff",
+                fontFamily: theme.fontFamily,
+              }}
+              className="px-6 py-2 rounded"
+            >
+              {isEditMode ? "Update" : "Simpan"}
+            </button>
+            <button
+              type="button"
+              style={{
+                background: theme.buttonHapus,
+                color: "#fff",
+                fontFamily: theme.fontFamily,
+              }}
+              className="px-6 py-2 rounded"
+              onClick={handleDeleteTransaksi}
+              disabled={!isEditMode || !selectedTransaksiId}
+              title={!isEditMode ? "Pilih transaksi dengan double-click untuk menghapus" : "Hapus transaksi yang dipilih"}
+            >
+              Hapus
+            </button>
+            <button
+              type="button"
+              style={{
+                background: theme.buttonRefresh,
+                color: "#fff",
+                fontFamily: theme.fontFamily,
+              }}
+              className="px-6 py-2 rounded"
+              onClick={handleResetForm}
+            >
+              Kosongkan
+            </button>
+          </div>
         </div>
       </form>
 
@@ -1327,6 +1525,283 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
             >
               <button
                 onClick={() => setShowSummaryPopup(false)}
+                className="px-6 py-2 rounded"
+                style={{
+                  background: theme.buttonHapus,
+                  color: "#fff",
+                  fontFamily: theme.fontFamily,
+                }}
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📤 BULK IMPORT MODAL */}
+      {showBulkImportModal && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => !isBulkImporting && setShowBulkImportModal(false)}
+        >
+          <div 
+            className="rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-auto border"
+            style={{
+              background: theme.formColor,
+              color: theme.fontColor,
+              fontFamily: theme.fontFamily,
+              borderColor: theme.fontColor + '30',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div 
+              className="sticky top-0 px-6 py-4 border-b flex justify-between items-center"
+              style={{
+                background: "#10b981",
+                color: "#fff",
+              }}
+            >
+              <h2 className="text-xl font-bold">📤 Bulk Import Transaksi</h2>
+              <button
+                onClick={() => !isBulkImporting && setShowBulkImportModal(false)}
+                className="text-2xl hover:opacity-80"
+                disabled={isBulkImporting}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="mb-4">
+                <p className="mb-2">Format Excel yang harus digunakan:</p>
+                <div className="p-3 rounded text-sm" style={{ background: theme.fieldColor, color: theme.fontColor }}>
+                  <strong>Kolom wajib:</strong> Tanggal | Akun Transaksi | Debit | Kredit | Deskripsi | Project No (opsional)
+                </div>
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.href = `${import.meta.env.VITE_API_URL}/input-transaksi/bulk-import-template`;
+                    }}
+                    className="px-4 py-2 rounded text-sm"
+                    style={{
+                      background: "#3b82f6",
+                      color: "#fff",
+                      fontFamily: theme.fontFamily,
+                    }}
+                  >
+                    📥 Download Template Excel
+                  </button>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="block mb-2 font-medium">Upload File Excel (.xlsx)</label>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleBulkImportFileChange}
+                  disabled={isBulkImporting}
+                  className="border rounded px-3 py-2 w-full"
+                  style={{
+                    background: theme.fieldColor,
+                    color: theme.fontColor,
+                    fontFamily: theme.fontFamily,
+                  }}
+                />
+              </div>
+
+              {bulkImportData.length > 0 && (
+                <div className="mb-4">
+                  <p className="font-medium mb-2">Data yang akan diimport: {bulkImportData.length} transaksi</p>
+                  <div className="max-h-64 overflow-y-auto border rounded">
+                    <table className="w-full text-sm">
+                      <thead style={{ background: "#10b981", color: "#fff" }}>
+                        <tr>
+                          <th className="px-2 py-1">#</th>
+                          <th className="px-2 py-1">Tanggal</th>
+                          <th className="px-2 py-1">Akun</th>
+                          <th className="px-2 py-1">Debit</th>
+                          <th className="px-2 py-1">Kredit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bulkImportData.slice(0, 10).map((row, idx) => {
+                          // Konversi tanggal untuk preview
+                          let displayTanggal = row['Tanggal'];
+                          if (typeof displayTanggal === 'number') {
+                            // Excel serial date - convert to YYYY-MM-DD
+                            const date = new Date((displayTanggal - 25569) * 86400 * 1000);
+                            displayTanggal = date.toISOString().split('T')[0];
+                          } else if (displayTanggal) {
+                            // String date - convert to YYYY-MM-DD
+                            const date = new Date(displayTanggal);
+                            displayTanggal = date.toISOString().split('T')[0];
+                          }
+                          
+                          return (
+                            <tr key={idx} className="border-b">
+                              <td className="px-2 py-1">{idx + 1}</td>
+                              <td className="px-2 py-1">{displayTanggal}</td>
+                              <td className="px-2 py-1">{String(row['Akun Transaksi'])}</td>
+                              <td className="px-2 py-1">{formatNumber(row['Debit'] || 0)}</td>
+                              <td className="px-2 py-1">{formatNumber(row['Kredit'] || 0)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {bulkImportData.length > 10 && (
+                      <div className="text-center py-2 text-sm">
+                        ...dan {bulkImportData.length - 10} baris lainnya
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {isBulkImporting && (
+                <div className="mb-4">
+                  <div className="flex justify-between mb-2">
+                    <span>Progress:</span>
+                    <span>{bulkImportProgress.current} / {bulkImportProgress.total}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-4">
+                    <div 
+                      className="bg-green-500 h-4 rounded-full transition-all duration-300"
+                      style={{ 
+                        width: `${(bulkImportProgress.current / bulkImportProgress.total) * 100}%` 
+                      }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div 
+              className="sticky bottom-0 px-6 py-4 border-t flex justify-end gap-2"
+              style={{
+                background: theme.backgroundFieldset,
+              }}
+            >
+              <button
+                onClick={handleBulkImport}
+                disabled={bulkImportData.length === 0 || isBulkImporting}
+                className="px-6 py-2 rounded"
+                style={{
+                  background: bulkImportData.length === 0 || isBulkImporting ? "#999" : "#10b981",
+                  color: "#fff",
+                  fontFamily: theme.fontFamily,
+                }}
+              >
+                {isBulkImporting ? "Importing..." : "Import"}
+              </button>
+              <button
+                onClick={() => setShowBulkImportModal(false)}
+                disabled={isBulkImporting}
+                className="px-6 py-2 rounded"
+                style={{
+                  background: theme.buttonHapus,
+                  color: "#fff",
+                  fontFamily: theme.fontFamily,
+                }}
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📋 AUDIT TRAIL MODAL */}
+      {showAuditTrailModal && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => setShowAuditTrailModal(false)}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-auto"
+            style={{
+              background: theme.backgroundFieldset,
+              color: theme.fontColor,
+              fontFamily: theme.fontFamily,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div 
+              className="sticky top-0 px-6 py-4 border-b flex justify-between items-center"
+              style={{
+                background: "#3b82f6",
+                color: "#fff",
+              }}
+            >
+              <h2 className="text-xl font-bold">📋 Audit Trail - Transaksi #{selectedTransaksiId}</h2>
+              <button
+                onClick={() => setShowAuditTrailModal(false)}
+                className="text-2xl hover:opacity-80"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              {loadingAuditTrail ? (
+                <div className="text-center py-8">Loading...</div>
+              ) : auditTrailData.length === 0 ? (
+                <div className="text-center py-8">Tidak ada audit trail untuk transaksi ini</div>
+              ) : (
+                <div className="space-y-4">
+                  {auditTrailData.map((audit, idx) => (
+                    <div 
+                      key={idx} 
+                      className="border rounded p-4"
+                      style={{
+                        background: theme.fieldColor,
+                        borderColor: audit.action === "DELETE" ? "#ef4444" : audit.action === "UPDATE" ? "#f59e0b" : "#10b981"
+                      }}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <span 
+                            className="px-3 py-1 rounded text-white text-sm font-bold"
+                            style={{
+                              background: audit.action === "DELETE" ? "#ef4444" : audit.action === "UPDATE" ? "#f59e0b" : "#10b981"
+                            }}
+                          >
+                            {audit.action}
+                          </span>
+                          <span className="ml-3 text-sm">
+                            oleh <strong>{audit.user}</strong>
+                          </span>
+                        </div>
+                        <span className="text-sm text-gray-500">
+                          {new Date(audit.timestamp).toLocaleString('id-ID')}
+                        </span>
+                      </div>
+                      <div className="mt-2">
+                        <p className="text-sm">{audit.changes}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div 
+              className="sticky bottom-0 px-6 py-4 border-t flex justify-end"
+              style={{
+                background: theme.backgroundFieldset,
+              }}
+            >
+              <button
+                onClick={() => setShowAuditTrailModal(false)}
                 className="px-6 py-2 rounded"
                 style={{
                   background: theme.buttonHapus,

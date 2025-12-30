@@ -133,6 +133,10 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// ✅ LOG AUDIT TRAIL
+		LogAuditTrail(db, c, "input_transaksi", input.ID, "CREATE", 
+			fmt.Sprintf("Transaksi %s dibuat: Debit=%f, Kredit=%f", input.NoTransaksi, input.Debit, input.Kredit))
+
 		// --- Tambahan: Simpan ke tabel GL ---
 		// Ambil kategori COA dari AkunTransaksi
 		var coa models.MasterCOA
@@ -162,7 +166,7 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 				// Transaksi normal: Akun Transaksi di Debit, COA Akun Bank di Kredit
 				if input.Debit > 0 {
 					gl1 := models.GL{
-						Tanggal:        input.Tanggal,
+						Tanggal:        input.Tanggal.Time,
 						COAAkunBank:    input.CoaAkunBank,
 						AkunTransaksi:  input.AkunTransaksi,
 						Deskripsi:      input.Deskripsi,
@@ -177,7 +181,7 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 					syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
 
 					gl2 := models.GL{
-						Tanggal:        input.Tanggal,
+						Tanggal:        input.Tanggal.Time,
 						COAAkunBank:    input.CoaAkunBank,
 						AkunTransaksi:  input.CoaAkunBank,
 						Deskripsi:      input.Deskripsi,
@@ -195,7 +199,7 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 				if input.Kredit > 0 {
 
 					gl1 := models.GL{
-						Tanggal:        input.Tanggal,
+						Tanggal:        input.Tanggal.Time,
 						COAAkunBank:    input.CoaAkunBank,
 						AkunTransaksi:  input.AkunTransaksi,
 						Deskripsi:      input.Deskripsi,
@@ -210,7 +214,7 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 					syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
 
 					gl2 := models.GL{
-						Tanggal:        input.Tanggal,
+						Tanggal:        input.Tanggal.Time,
 						COAAkunBank:    input.CoaAkunBank,
 						AkunTransaksi:  input.CoaAkunBank,
 						Deskripsi:      input.Deskripsi,
@@ -230,7 +234,7 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 				// Baris 1: Akun Transaksi di Kredit, Baris 2: COA Akun Bank di Debit
 				if input.Kredit > 0 {
 					gl1 := models.GL{
-						Tanggal:        input.Tanggal,
+						Tanggal:        input.Tanggal.Time,
 						COAAkunBank:    input.CoaAkunBank,
 						AkunTransaksi:  input.AkunTransaksi,
 						Deskripsi:      input.Deskripsi,
@@ -245,7 +249,7 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 					syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
 
 					gl2 := models.GL{
-						Tanggal:        input.Tanggal,
+						Tanggal:        input.Tanggal.Time,
 						COAAkunBank:    input.CoaAkunBank,
 						AkunTransaksi:  input.CoaAkunBank,
 						Deskripsi:      input.Deskripsi,
@@ -262,7 +266,7 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 				if input.Debit > 0 {
 					// Akun Transaksi di Debit, COA Akun Bank di Kredit
 					gl1 := models.GL{
-						Tanggal:        input.Tanggal,
+						Tanggal:        input.Tanggal.Time,
 						COAAkunBank:    input.CoaAkunBank,
 						AkunTransaksi:  input.CoaAkunBank,
 						Deskripsi:      input.Deskripsi,
@@ -277,7 +281,7 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 					syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
 
 					gl2 := models.GL{
-						Tanggal:        input.Tanggal,
+						Tanggal:        input.Tanggal.Time,
 						COAAkunBank:    input.CoaAkunBank,
 						AkunTransaksi:  input.AkunTransaksi,
 						Deskripsi:      input.Deskripsi,
@@ -295,7 +299,7 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 				// Untuk tipe 5,6,7,8: Akun Transaksi di Debit, COA Akun Bank di Kredit
 				if input.Debit > 0 {
 					gl1 := models.GL{
-						Tanggal:        input.Tanggal,
+						Tanggal:        input.Tanggal.Time,
 						COAAkunBank:    input.CoaAkunBank,
 						AkunTransaksi:  input.AkunTransaksi,
 						Deskripsi:      input.Deskripsi,
@@ -310,7 +314,7 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 					syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
 
 					gl2 := models.GL{
-						Tanggal:        input.Tanggal,
+						Tanggal:        input.Tanggal.Time,
 						COAAkunBank:    input.CoaAkunBank,
 						AkunTransaksi:  input.CoaAkunBank,
 						Deskripsi:      input.Deskripsi,
@@ -326,7 +330,7 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 				}
 				if input.Kredit > 0 {
 					gl1 := models.GL{
-						Tanggal:        input.Tanggal,
+						Tanggal:        input.Tanggal.Time,
 						COAAkunBank:    input.CoaAkunBank,
 						AkunTransaksi:  input.AkunTransaksi,
 						Deskripsi:      input.Deskripsi,
@@ -341,7 +345,7 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 					syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
 
 					gl2 := models.GL{
-						Tanggal:        input.Tanggal,
+						Tanggal:        input.Tanggal.Time,
 						COAAkunBank:    input.CoaAkunBank,
 						AkunTransaksi:  input.CoaAkunBank,
 						Deskripsi:      input.Deskripsi,
@@ -372,6 +376,10 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Data not found"})
 			return
 		}
+		
+		// Store old data for audit
+		oldData := input
+		
 		var req models.InputTransaksi
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -390,6 +398,10 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+
+		// ✅ LOG AUDIT TRAIL
+		LogAuditTrail(db, c, "input_transaksi", input.ID, "UPDATE", 
+			GenerateChangeDescription("UPDATE", oldData, req))
 
 		// Insert ulang ke GL sesuai data terbaru
 		var updated models.InputTransaksi
@@ -413,7 +425,7 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 
 					if updated.Debit > 0 {
 						gl1 := models.GL{
-							Tanggal:        updated.Tanggal,
+							Tanggal:        updated.Tanggal.Time,
 							COAAkunBank:    updated.CoaAkunBank,
 							AkunTransaksi:  updated.AkunTransaksi,
 							Deskripsi:      updated.Deskripsi,
@@ -427,7 +439,7 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
 
 						gl2 := models.GL{
-							Tanggal:        updated.Tanggal,
+							Tanggal:        updated.Tanggal.Time,
 							COAAkunBank:    updated.CoaAkunBank,
 							AkunTransaksi:  updated.CoaAkunBank,
 							Deskripsi:      updated.Deskripsi,
@@ -443,7 +455,7 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 					if updated.Kredit > 0 {
 
 						gl1 := models.GL{
-							Tanggal:        updated.Tanggal,
+							Tanggal:        updated.Tanggal.Time,
 							COAAkunBank:    updated.CoaAkunBank,
 							AkunTransaksi:  updated.AkunTransaksi,
 							Deskripsi:      updated.Deskripsi,
@@ -457,7 +469,7 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
 
 						gl2 := models.GL{
-							Tanggal:        updated.Tanggal,
+							Tanggal:        updated.Tanggal.Time,
 							COAAkunBank:    updated.CoaAkunBank,
 							AkunTransaksi:  updated.CoaAkunBank,
 							Deskripsi:      updated.Deskripsi,
@@ -474,7 +486,7 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 				} else if tipeAkun == "2" || tipeAkun == "3" || tipeAkun == "4" {
 					if updated.Kredit > 0 {
 						gl1 := models.GL{
-							Tanggal:        updated.Tanggal,
+							Tanggal:        updated.Tanggal.Time,
 							COAAkunBank:    updated.CoaAkunBank,
 							AkunTransaksi:  updated.AkunTransaksi,
 							Deskripsi:      updated.Deskripsi,
@@ -488,7 +500,7 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
 
 						gl2 := models.GL{
-							Tanggal:        updated.Tanggal,
+							Tanggal:        updated.Tanggal.Time,
 							COAAkunBank:    updated.CoaAkunBank,
 							AkunTransaksi:  updated.CoaAkunBank,
 							Deskripsi:      updated.Deskripsi,
@@ -503,7 +515,7 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 					}
 					if updated.Debit > 0 {
 						gl1 := models.GL{
-							Tanggal:        updated.Tanggal,
+							Tanggal:        updated.Tanggal.Time,
 							COAAkunBank:    updated.CoaAkunBank,
 							AkunTransaksi:  updated.CoaAkunBank,
 							Deskripsi:      updated.Deskripsi,
@@ -517,7 +529,7 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
 
 						gl2 := models.GL{
-							Tanggal:        updated.Tanggal,
+							Tanggal:        updated.Tanggal.Time,
 							COAAkunBank:    updated.CoaAkunBank,
 							AkunTransaksi:  updated.AkunTransaksi,
 							Deskripsi:      updated.Deskripsi,
@@ -533,7 +545,7 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 				} else if tipeAkun == "5" || tipeAkun == "6" || tipeAkun == "7" || tipeAkun == "8" {
 					if updated.Debit > 0 {
 						gl1 := models.GL{
-							Tanggal:        updated.Tanggal,
+							Tanggal:        updated.Tanggal.Time,
 							COAAkunBank:    updated.CoaAkunBank,
 							AkunTransaksi:  updated.AkunTransaksi,
 							Deskripsi:      updated.Deskripsi,
@@ -547,7 +559,7 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
 
 						gl2 := models.GL{
-							Tanggal:        updated.Tanggal,
+							Tanggal:        updated.Tanggal.Time,
 							COAAkunBank:    updated.CoaAkunBank,
 							AkunTransaksi:  updated.CoaAkunBank,
 							Deskripsi:      updated.Deskripsi,
@@ -562,7 +574,7 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 					}
 					if updated.Kredit > 0 {
 						gl1 := models.GL{
-							Tanggal:        updated.Tanggal,
+							Tanggal:        updated.Tanggal.Time,
 							COAAkunBank:    updated.CoaAkunBank,
 							AkunTransaksi:  updated.AkunTransaksi,
 							Deskripsi:      updated.Deskripsi,
@@ -576,7 +588,7 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
 
 						gl2 := models.GL{
-							Tanggal:        updated.Tanggal,
+							Tanggal:        updated.Tanggal.Time,
 							COAAkunBank:    updated.CoaAkunBank,
 							AkunTransaksi:  updated.CoaAkunBank,
 							Deskripsi:      updated.Deskripsi,
@@ -602,6 +614,10 @@ func DeleteInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 		id := c.Param("id")
 		var input models.InputTransaksi
 		if err := db.First(&input, id).Error; err == nil {
+			// ✅ LOG AUDIT TRAIL sebelum delete
+			LogAuditTrail(db, c, "input_transaksi", input.ID, "DELETE", 
+				fmt.Sprintf("Transaksi %s dihapus: Debit=%f, Kredit=%f", input.NoTransaksi, input.Debit, input.Kredit))
+			
 			// Ambil semua GL terkait (termasuk yang sudah di-soft delete)
 			var gls []models.GL
 			db.Unscoped().Where("nomor_transaksi = ?", input.NoTransaksi).Find(&gls)

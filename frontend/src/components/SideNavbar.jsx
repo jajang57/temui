@@ -38,9 +38,15 @@ export default function SideNavbar({ onClose }) {
         { name: "Buku Kas", to: "/input-transaksi" },
         { name: "Pembelian", to: "/transaksi/pembelian" },
         { name: "Penjualan", to: "/transaksi/penjualan" },
-        { name: "Aset Tetap" },
-        { name: "Aset Tetap Berwujud" },
-        { name: "Aset Tetap Tak Berwujud" },
+        { 
+          name: "Aset Tetap",
+          subDropdown: [
+            { name: "Master Aset Tetap", to: "/master-data/aset-tetap" },
+            { name: "Registrasi Aset", to: "/aset-tetap/registrasi" },
+            { name: "Posting ke GL", to: "/aset-tetap/posting-gl" },
+            { name: "Hitung Penyusutan", to: "/aset-tetap/penyusutan" },
+          ]
+        },
       ],
     },
     {

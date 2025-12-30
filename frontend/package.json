@@ -22,6 +22,7 @@
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tabs": "^1.1.12",
     "@tanstack/react-table": "^8.21.3",
+    "@vitejs/plugin-react": "^4.6.0",
     "ag-grid-community": "^34.0.2",
     "ag-grid-enterprise": "^34.0.2",
     "ag-grid-react": "^34.0.2",
@@ -45,9 +46,8 @@
     "styled-components": "^6.1.19",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
-    "xlsx": "^0.18.5",
     "vite": "^6.3.5",
-    "@vitejs/plugin-react": "^4.6.0"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.21",

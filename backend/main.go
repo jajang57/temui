@@ -73,11 +73,10 @@ func main() {
 		&models.MasterPajak{},
 		&models.Pembelian{}, // ✅ Tambahkan ini
 		&models.PembelianDetail{},
+		&models.MasterAsetTetap{},
+		&models.HistoriPenyusutan{},
+		&models.AuditTrail{}, // ✅ NEW: Audit Trail
 	)
-
-	if err != nil {
-		panic(fmt.Sprintf("AutoMigrate error: %v", err))
-	}
 	// Data migration untuk kode category yang kosong
 	migrateKodeCategory(db)
 
@@ -86,9 +85,16 @@ func main() {
 	// Konfigurasi CORS dengan AllowOriginFunc untuk wildcard vercel.app
 	config := cors.Config{
 		AllowOriginFunc: func(origin string) bool {
-			// Allow localhost
+			// Allow localhost and 127.0.0.1
 			if strings.HasPrefix(origin, "http://localhost:") ||
 				strings.HasPrefix(origin, "http://127.0.0.1:") {
+				return true
+			}
+			// Allow all local network IPs (192.168.x.x, 10.x.x.x, 172.16-31.x.x, 26.x.x.x)
+			if strings.HasPrefix(origin, "http://192.168.") ||
+				strings.HasPrefix(origin, "http://10.") ||
+				strings.HasPrefix(origin, "http://172.") ||
+				strings.HasPrefix(origin, "http://26.") {
 				return true
 			}
 			// Allow all vercel.app subdomains
@@ -149,6 +155,9 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok", "message": "Server is healthy"})
 	})
 
+	// Public download endpoints
+	r.GET("/api/input-transaksi/bulk-import-template", handlers.DownloadBulkImportTemplate()) // Template download (no auth required)
+
 	// Protected routes (perlu authentication)
 	api := r.Group("/api")
 	api.Use(handlers.AuthMiddleware())
@@ -180,6 +189,7 @@ func main() {
 		api.POST("/input-transaksi", handlers.PostInputTransaksi(db))
 		api.PUT("/input-transaksi/:id", handlers.UpdateInputTransaksi(db))
 		api.DELETE("/input-transaksi/:id", handlers.DeleteInputTransaksi(db))
+		api.GET("/input-transaksi/:id/audit", handlers.GetInputTransaksiAudit(db)) // ✅ NEW: Audit Trail
 		api.GET("/generate-no-transaksi", handlers.GetGenerateNoTransaksi(db))
 		api.GET("/trial-balance", handlers.GetTrialBalance(db))
 		api.GET("/buku-besar", handlers.GetBukuBesar(db))
@@ -231,11 +241,22 @@ func main() {
 		api.GET("/master-barang-jasa/for-sale", handlers.GetMasterBarangJasaForSale(db))
 		api.GET("/master-barang-jasa/for-purchase", handlers.GetMasterBarangJasaForPurchase(db))
 
-		// Penjualan Routes
+		// Master Aset Tetap Routes
+		api.GET("/master-aset-tetap", handlers.GetMasterAsetTetap(db))
+		api.GET("/master-aset-tetap/:id", handlers.GetMasterAsetTetapByID(db))
+		api.POST("/master-aset-tetap", handlers.CreateMasterAsetTetap(db))
+		api.PUT("/master-aset-tetap/:id", handlers.UpdateMasterAsetTetap(db))
+		api.DELETE("/master-aset-tetap/:id", handlers.DeleteMasterAsetTetap(db))
+		api.POST("/master-aset-tetap/:id/jual", handlers.JualAsetTetap(db))
+	
+	// Aset Tetap Registrasi Routes
+	api.GET("/aset-tetap/items-for-registration", handlers.GetPembelianItemsForAssetRegistration(db))
+	api.GET("/aset-tetap/draft-assets", handlers.GetDraftAssets(db))
+	api.POST("/aset-tetap/post-to-gl", handlers.PostAssetsToGL(db))
+	api.GET("/aset-tetap/assets-for-depreciation", handlers.GetAssetsForDepreciation(db))
+	api.POST("/aset-tetap/post-depreciation", handlers.PostDepreciationToGL(db))
+
 		penjualanHandler := handlers.NewPenjualanHandler(db)
-		api.GET("/penjualan", penjualanHandler.GetAllPenjualan)
-		api.GET("/penjualan/:id", penjualanHandler.GetPenjualanByID)
-		api.POST("/penjualan", penjualanHandler.CreatePenjualan)
 		api.PUT("/penjualan/:id", penjualanHandler.UpdatePenjualan)
 		api.DELETE("/penjualan/:id", penjualanHandler.DeletePenjualan)
 		api.GET("/penjualan/list-with-customer", penjualanHandler.GetPenjualanListWithCustomer)
