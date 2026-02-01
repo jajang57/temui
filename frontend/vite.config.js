@@ -21,6 +21,13 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0', // agar bisa diakses dari komputer lain
-    port: 3000        // port default, bisa diganti jika perlu
+    port: 3000,       // port default, bisa diganti jika perlu
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
   }
 })

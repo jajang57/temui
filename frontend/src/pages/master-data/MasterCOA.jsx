@@ -4,7 +4,7 @@ import { useTheme } from "../../context/ThemeContext"; // pastikan sudah ada
 
 export default function MasterCOA() {
   const { theme } = useTheme();
-  const [form, setForm] = useState({ kode: "", nama: "", masterCategoryCOAId: "", saldoAwal: "" });
+  const [form, setForm] = useState({ kode: "", nama: "", masterCategoryCOAId: "", saldoAwal: "", cashflowActivity: "", cashflowDirection: "" });
   const [data, setData] = useState([]);
   const [kategoriList, setKategoriList] = useState([]);
   const [error, setError] = useState("");
@@ -19,26 +19,26 @@ export default function MasterCOA() {
   const [filterKode, setFilterKode] = useState("");
   const [filterNama, setFilterNama] = useState("");
   const [filterKategori, setFilterKategori] = useState("");
-  
+
   // State untuk format angka saldo awal
   const [formattedSaldoAwal, setFormattedSaldoAwal] = useState("");
 
   // Fungsi untuk format angka dengan 2 desimal tanpa rounding
   const formatNumber = (value) => {
     if (!value || value === '') return '';
-    
+
     // Hapus semua karakter non-digit dan titik desimal
     let cleanValue = value.toString().replace(/[^\d.]/g, '');
-    
+
     // Pastikan hanya ada satu titik desimal
     const parts = cleanValue.split('.');
     if (parts.length > 2) {
       cleanValue = parts[0] + '.' + parts.slice(1).join('');
     }
-    
+
     // Convert ke number
     const numericValue = parseFloat(cleanValue) || 0;
-    
+
     // Format dengan pemisah ribuan (koma) dan desimal (titik) - format internasional
     // Tanpa rounding, langsung format apa adanya
     return new Intl.NumberFormat('en-US', {
@@ -76,12 +76,12 @@ export default function MasterCOA() {
           // Coba convert ke number untuk sorting numerik
           const aNum = parseInt(a.kode);
           const bNum = parseInt(b.kode);
-          
+
           // Jika keduanya angka, sort sebagai angka
           if (!isNaN(aNum) && !isNaN(bNum)) {
             return aNum - bNum;
           }
-          
+
           // Jika bukan angka, sort sebagai string
           return a.kode.toString().localeCompare(b.kode.toString(), undefined, { numeric: true, sensitivity: 'base' });
         });
@@ -176,6 +176,8 @@ export default function MasterCOA() {
       nama: row.nama,
       masterCategoryCOAId: row.masterCategoryCOAId?.toString() || "",
       saldoAwal: row.saldoAwal?.toString() || "",
+      cashflowActivity: row.cashflowActivity || "",
+      cashflowDirection: row.cashflowDirection || "",
     });
     setFormattedSaldoAwal(row.saldoAwal ? formatNumber(row.saldoAwal) : "");
     setEditId(row.id);
@@ -209,16 +211,16 @@ export default function MasterCOA() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+
     // Khusus untuk saldo awal
     if (name === "saldoAwal") {
       setFormattedSaldoAwal(value);
       setForm(prev => ({ ...prev, [name]: unformatNumber(value) }));
-    } 
+    }
     // Khusus untuk kategori COA - generate kode otomatis
     else if (name === "masterCategoryCOAId") {
       setForm(prev => ({ ...prev, [name]: value }));
-      
+
       // Generate kode otomatis jika bukan mode edit
       if (!editId && value) {
         const generatedKode = generateKodeCOA(value);
@@ -248,7 +250,7 @@ export default function MasterCOA() {
 
   // Fungsi untuk kosongkan/reset form
   const handleResetForm = () => {
-    setForm({ kode: "", nama: "", masterCategoryCOAId: "", saldoAwal: "" });
+    setForm({ kode: "", nama: "", masterCategoryCOAId: "", saldoAwal: "", cashflowActivity: "", cashflowDirection: "" });
     setFormattedSaldoAwal("");
     setEditId(null);
     setError("");
@@ -297,7 +299,7 @@ export default function MasterCOA() {
     })
     .forEach(kategori => {
       // Sort items within each category by kode akun
-      sortedGroupedData[kategori] = groupedData[kategori].sort((a, b) => 
+      sortedGroupedData[kategori] = groupedData[kategori].sort((a, b) =>
         a.kode.localeCompare(b.kode)
       );
     });
@@ -315,20 +317,20 @@ export default function MasterCOA() {
   // Fungsi untuk generate kode COA berdasarkan kategori
   const generateKodeCOA = (kategoryCOAId) => {
     if (!kategoryCOAId) return "";
-    
+
     // Cari kategori yang dipilih
     const selectedKategori = kategoriList.find(k => String(k.id) === String(kategoryCOAId));
     if (!selectedKategori) return "";
-    
+
     const kodeKategori = selectedKategori.kode;
-    
+
     // Filter data COA berdasarkan kategori yang sama (tidak termasuk data yang sedang diedit)
     const coaInSameCategory = data.filter(coa => {
       const isInSameCategory = coa.masterCategoryCOA && String(coa.masterCategoryCOA.id) === String(kategoryCOAId);
       const isNotCurrentEdit = editId ? coa.id !== editId : true;
       return isInSameCategory && isNotCurrentEdit;
     });
-    
+
     // Jika tidak ada COA dalam kategori ini, mulai dari format default
     if (coaInSameCategory.length === 0) {
       // Cek apakah kode kategori sudah berformat x-xxx, jika ya gunakan format yang sama
@@ -340,10 +342,10 @@ export default function MasterCOA() {
         return `${kodeKategori}001`;
       }
     }
-    
+
     // Cari kode dengan format separator - untuk menentukan pola
     const coaWithSeparator = coaInSameCategory.find(coa => coa.kode.includes('-'));
-    
+
     if (coaWithSeparator) {
       // Ada data dengan separator -, ikuti pola tersebut
       // Ambil semua nomor setelah separator terakhir dari kode-kode yang ada
@@ -351,11 +353,11 @@ export default function MasterCOA() {
         .map(coa => {
           const kodeStr = coa.kode.toString();
           const parts = kodeStr.split('-');
-          
+
           if (parts.length >= 2) {
             // Ambil angka setelah strip terakhir, batasi 3 digit terakhir
             const nomorBelakang = parts[parts.length - 1];
-            
+
             // Batasi hanya 3 digit terakhir
             let limitedNumber;
             if (nomorBelakang.length > 3) {
@@ -363,7 +365,7 @@ export default function MasterCOA() {
             } else {
               limitedNumber = nomorBelakang;
             }
-            
+
             const nomor = parseInt(limitedNumber, 10);
             console.log(`Parsing kode ${kodeStr}: parts=${JSON.stringify(parts)}, nomorBelakang="${nomorBelakang}", limited="${limitedNumber}", parsed=${nomor}`);
             return isNaN(nomor) ? 0 : nomor;
@@ -372,18 +374,18 @@ export default function MasterCOA() {
         })
         .filter(num => num > 0)
         .sort((a, b) => b - a); // Sort descending untuk ambil yang terbesar      
-      
+
       // Ambil nomor terbesar dan tambah 1
       const maxNumber = nomorUrut.length > 0 ? nomorUrut[0] : 0;
       const nextNumber = maxNumber + 1;
-      
+
       // Format nextNumber dengan 3 digit (leading zero)
       const formattedNextNumber = nextNumber.toString().padStart(3, '0');
-      
+
       // Ambil prefix dari kode sample (bagian sebelum strip terakhir)
       const sampleKode = coaWithSeparator.kode;
       const sampleParts = sampleKode.split('-');
-      
+
       let prefix;
       if (sampleParts.length >= 2) {
         // Ambil semua bagian kecuali bagian terakhir, lalu gabungkan dengan -
@@ -391,9 +393,9 @@ export default function MasterCOA() {
       } else {
         prefix = sampleParts[0];
       }
-      
+
       const finalResult = `${prefix}-${formattedNextNumber}`;
-      
+
       console.log(`Generate dengan separator (3 digit):`, {
         sampleKode,
         sampleParts,
@@ -403,9 +405,9 @@ export default function MasterCOA() {
         formattedNextNumber,
         finalResult
       });
-      
+
       return finalResult;
-      
+
     } else {
       // Tidak ada separator, gunakan format tanpa separator
       const nomorUrut = coaInSameCategory
@@ -420,11 +422,11 @@ export default function MasterCOA() {
         })
         .filter(num => num > 0)
         .sort((a, b) => b - a);
-      
+
       const maxNumber = nomorUrut.length > 0 ? nomorUrut[0] : 0;
       const nextNumber = maxNumber + 1;
       const formattedNumber = nextNumber.toString().padStart(3, '0');
-      
+
       return `${kodeKategori}${formattedNumber}`;
     }
   };
@@ -587,6 +589,49 @@ export default function MasterCOA() {
                 }}
               />
             </div>
+
+            {/* Cashflow Mapping Section */}
+            <div className="p-3 rounded-lg border" style={{ borderColor: theme.border, background: theme.bgSecondary }}>
+              <h3 className="font-semibold mb-3 text-sm uppercase tracking-wider" style={{ color: theme.fontColor }}>Mapping Arus Kas</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="block mb-1 text-sm font-medium" style={{ color: theme.fontColor }}>
+                    Aktivitas Override
+                  </label>
+                  <select
+                    name="cashflowActivity"
+                    value={form.cashflowActivity}
+                    onChange={handleChange}
+                    className="w-full border rounded-lg px-3 py-2 text-sm transition"
+                    style={{ background: theme.fieldColor, color: theme.fontColor }}
+                  >
+                    <option value="">Auto (Heuristik System)</option>
+                    <option value="operating">Operasi</option>
+                    <option value="investing">Investasi</option>
+                    <option value="financing">Pendanaan</option>
+                  </select>
+                </div>
+                {form.cashflowActivity && (
+                  <div>
+                    <label className="block mb-1 text-sm font-medium" style={{ color: theme.fontColor }}>
+                      Arah Arus Override
+                    </label>
+                    <select
+                      name="cashflowDirection"
+                      value={form.cashflowDirection}
+                      onChange={handleChange}
+                      className="w-full border rounded-lg px-3 py-2 text-sm transition"
+                      style={{ background: theme.fieldColor, color: theme.fontColor }}
+                    >
+                      <option value="">Auto (Standard)</option>
+                      <option value="in">Masuk (Inflow)</option>
+                      <option value="out">Keluar (Outflow)</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {error && <div className="text-red-500 text-sm">{error}</div>}
             <div className="flex gap-2">
               <button
@@ -651,6 +696,7 @@ export default function MasterCOA() {
                   <th className="px-3 py-2 font-semibold border-b">Kode</th>
                   <th className="px-3 py-2 font-semibold border-b">Nama</th>
                   <th className="px-3 py-2 font-semibold border-b">Kategori</th>
+                  <th className="px-3 py-2 font-semibold border-b">Arus Kas</th>
                   <th className="px-3 py-2 font-semibold border-b">Saldo Awal</th>
                   <th className="px-3 py-2 font-semibold border-b">Aksi</th>
                 </tr>
@@ -697,6 +743,7 @@ export default function MasterCOA() {
                       }}
                     />
                   </th>
+                  <th className="px-3 py-1 border-b"></th> {/* Maps Column filter placeholder */}
                   <th />
                 </tr>
               </thead>
@@ -704,7 +751,7 @@ export default function MasterCOA() {
                 {pagedData.map((row) =>
                   row.isHeader ? (
                     <tr key={"header-" + row.kategori} style={{ background: theme.cardColor }}>
-                      <td colSpan={5} className="px-3 py-2 font-bold border-b" style={{ color: theme.fontColor }}>
+                      <td colSpan={6} className="px-3 py-2 font-bold border-b" style={{ color: theme.fontColor }}>
                         {row.kategori}
                       </td>
                     </tr>
@@ -717,6 +764,18 @@ export default function MasterCOA() {
                           ? `${row.masterCategoryCOA.kode} - ${row.masterCategoryCOA.nama} (${row.masterCategoryCOA.tipeAkun})`
                           : "-"
                         }
+                      </td>
+                      <td className="px-3 py-2">
+                        {row.cashflowActivity ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800" title="Override Manual">
+                            {row.cashflowActivity.charAt(0).toUpperCase() + row.cashflowActivity.slice(1)}
+                            {row.cashflowDirection ? ` (${row.cashflowDirection})` : ''}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600" title="Ditentukan Otomatis oleh Sistem">
+                            Auto
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-right">
                         {row.saldoAwal !== undefined && row.saldoAwal !== null
@@ -758,7 +817,7 @@ export default function MasterCOA() {
             </table>
           </div>
         </div>
-      </div>
+      </div >
       {showModalKategori && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40" >
           <div className="rounded-xl p-6 shadow-lg w-full max-w-6xl" style={{ background: theme.formColor }}>
@@ -866,8 +925,8 @@ export default function MasterCOA() {
                   <button
                     type="button"
                     className="px-4 py-2 rounded-lg font-semibold transition"
-                    style={{ 
-                      background: theme.buttonRefresh, 
+                    style={{
+                      background: theme.buttonRefresh,
                       color: "#fff",
                       fontFamily: theme.fontFamily,
                     }}
@@ -883,8 +942,8 @@ export default function MasterCOA() {
                   <button
                     type="submit"
                     className="px-4 py-2 rounded-lg font-semibold transition"
-                    style={{ 
-                      background: theme.buttonSimpan, 
+                    style={{
+                      background: theme.buttonSimpan,
                       color: "#fff",
                       fontFamily: theme.fontFamily,
                     }}
@@ -919,8 +978,8 @@ export default function MasterCOA() {
                             <button
                               type="button"
                               className="px-2 py-1 rounded-lg font-semibold transition text-sm"
-                              style={{ 
-                                background: theme.buttonEdit, 
+                              style={{
+                                background: theme.buttonEdit,
                                 color: "#fff",
                                 fontFamily: theme.fontFamily,
                               }}
@@ -939,8 +998,8 @@ export default function MasterCOA() {
                             <button
                               type="button"
                               className="px-2 py-1 rounded-lg font-semibold transition text-sm"
-                              style={{ 
-                                background: theme.buttonHapus, 
+                              style={{
+                                background: theme.buttonHapus,
                                 color: "#fff",
                                 fontFamily: theme.fontFamily,
                               }}
@@ -972,7 +1031,8 @@ export default function MasterCOA() {
             </div>
           </div>
         </div>
-      )}
-    </div>
+      )
+      }
+    </div >
   );
 }

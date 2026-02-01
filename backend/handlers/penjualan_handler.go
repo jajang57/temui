@@ -69,6 +69,18 @@ func (h *PenjualanHandler) CreatePenjualan(c *gin.Context) {
 
 	// Simpan header+detail + GL dalam satu transaksi
 	tx := h.DB.Begin()
+
+	// Generate Nomor Invoice jika AUTO atau kosong
+	if req.NomorInvoice == "" || req.NomorInvoice == "AUTO" {
+		newInvoice, err := GenerateNomorInvoice(tx, req.Tanggal)
+		if err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal generate nomor invoice", "details": err.Error()})
+			return
+		}
+		req.NomorInvoice = newInvoice
+	}
+
 	if err := tx.Create(&req).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal simpan penjualan", "details": err.Error()})
@@ -94,14 +106,116 @@ func (h *PenjualanHandler) CreatePenjualan(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"success": true, "reset": true})
 }
 
-// Get All Penjualan (beserta detail)
+// Get All Penjualan (paginated & searchable)
+// Get All Penjualan (paginated, searchable, sortable)
 func (h *PenjualanHandler) GetAllPenjualan(c *gin.Context) {
-	var penjualan []models.Penjualan
-	if err := h.DB.Preload("Details").Find(&penjualan).Error; err != nil {
+	// Parse pagination params
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	search := c.Query("search")
+	sortBy := c.DefaultQuery("sort_by", "id")
+	sortOrder := c.DefaultQuery("sort_order", "desc")
+
+	// Adjust page/limit defaults
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+	offset := (page - 1) * limit
+
+	var results []struct {
+		models.Penjualan
+		CustomerNama string `json:"customerNama"`
+	}
+	var total int64
+
+	// Build query with JOIN
+	query := h.DB.Table("penjualan").
+		Select("penjualan.*, master_pembeli.nama as customer_nama").
+		Joins("LEFT JOIN master_pembeli ON penjualan.customer_id = master_pembeli.id")
+
+	// Global Search (Invoice OR Customer Name OR Status)
+	if search != "" {
+		searchLike := "%" + strings.ToLower(search) + "%"
+		query = query.Where("LOWER(penjualan.nomor_invoice) LIKE ? OR LOWER(master_pembeli.nama) LIKE ? OR LOWER(penjualan.status) LIKE ?", searchLike, searchLike, searchLike)
+	}
+
+	// Specific Filters
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+	customerID := c.Query("customer_id")
+
+	if startDate != "" && endDate != "" {
+		query = query.Where("penjualan.tanggal BETWEEN ? AND ?", startDate, endDate)
+	}
+	if customerID != "" {
+		query = query.Where("penjualan.customer_id = ?", customerID)
+	}
+
+	// Dynamic Sorting
+	switch sortBy {
+	case "nomorInvoice":
+		sortBy = "penjualan.nomor_invoice"
+	case "tanggal":
+		sortBy = "penjualan.tanggal"
+	case "customerNama":
+		sortBy = "master_pembeli.nama" // Sort by joined column
+	case "total":
+		sortBy = "penjualan.total"
+	case "status":
+		sortBy = "penjualan.status"
+	default:
+		sortBy = "penjualan.id"
+	}
+	if sortOrder != "asc" {
+		sortOrder = "desc"
+	}
+
+	// Apply Sorting
+	query = query.Order(fmt.Sprintf("%s %s", sortBy, sortOrder))
+
+	// Count total before pagination
+	query.Count(&total)
+
+	// Fetch data with pagination
+	if err := query.Limit(limit).Offset(offset).Scan(&results).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal ambil data"})
 		return
 	}
-	c.JSON(http.StatusOK, penjualan)
+
+	// Calculate total pages
+	totalPages := int(math.Ceil(float64(total) / float64(limit)))
+
+	// Format response matches struct
+	var data []gin.H
+	for _, r := range results {
+		data = append(data, gin.H{
+			"id":            r.ID,
+			"nomorInvoice":  r.NomorInvoice,
+			"tanggal":       r.Tanggal,
+			"dueDate":       r.DueDate,
+			"customerId":    r.CustomerID,
+			"customerNama":  r.CustomerNama, // From JOIN
+			"total":         r.Total,
+			"status":        r.Status,
+			"gudangId":      r.GudangID,
+			"departementId": r.DepartementID,
+			"nomorEfaktur":  r.NomorEfaktur,
+			"notes":         r.Notes,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": data,
+		"meta": gin.H{
+			"total":      total,
+			"page":       page,
+			"limit":      limit,
+			"totalPages": totalPages,
+		},
+	})
 }
 
 // Get Penjualan by ID
@@ -496,6 +610,11 @@ func parseDppFormulaBackend(s string, rate float64) float64 {
 func GenerateSalesGLLines(db *gorm.DB, penjualan models.Penjualan) ([]models.GL, error) {
 	var gls []models.GL
 
+	nomorJurnal, err := GenerateNomorJurnal(db, penjualan.Tanggal)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate nomor jurnal: %w", err)
+	}
+
 	// 1) aggregate totals and maps
 	var totalDpp float64
 	var totalDiscount float64
@@ -586,25 +705,33 @@ func GenerateSalesGLLines(db *gorm.DB, penjualan models.Penjualan) ([]models.GL,
 		}
 	}
 
-	now := time.Now()
+	// Use Transaction Date, not Now
+	trxDate := penjualan.Tanggal
+
 	// Build GL lines (debits)
 	gls = append(gls, models.GL{
-		Tanggal:        now,
+		Tanggal:        trxDate,
 		AkunTransaksi:  accounts.ReceivableAccount,
 		Deskripsi:      "Piutang - " + penjualan.NomorInvoice,
 		Debit:          arDebit,
 		Kredit:         0,
 		NomorTransaksi: penjualan.NomorInvoice,
+		NomorJurnal:    nomorJurnal,
+		ContactID:      penjualan.CustomerID,
+		ContactType:    "customer",
 	})
 
 	if totalDiscount > 0 {
 		gls = append(gls, models.GL{
-			Tanggal:        now,
+			Tanggal:        trxDate,
 			AkunTransaksi:  accounts.DiscountAccount,
 			Deskripsi:      "Potongan / Discount - " + penjualan.NomorInvoice,
 			Debit:          totalDiscount,
 			Kredit:         0,
 			NomorTransaksi: penjualan.NomorInvoice,
+			NomorJurnal:    nomorJurnal,
+			ContactID:      penjualan.CustomerID,
+			ContactType:    "customer",
 		})
 	}
 
@@ -620,12 +747,15 @@ func GenerateSalesGLLines(db *gorm.DB, penjualan models.Penjualan) ([]models.GL,
 			continue
 		}
 		gls = append(gls, models.GL{
-			Tanggal:        now,
+			Tanggal:        trxDate,
 			AkunTransaksi:  acct,
 			Deskripsi:      "Withholding / PPH - " + penjualan.NomorInvoice,
 			Debit:          amt,
 			Kredit:         0,
 			NomorTransaksi: penjualan.NomorInvoice,
+			NomorJurnal:    nomorJurnal,
+			ContactID:      penjualan.CustomerID,
+			ContactType:    "customer",
 		})
 	}
 
@@ -635,12 +765,15 @@ func GenerateSalesGLLines(db *gorm.DB, penjualan models.Penjualan) ([]models.GL,
 			continue
 		}
 		gls = append(gls, models.GL{
-			Tanggal:        now,
+			Tanggal:        trxDate,
 			AkunTransaksi:  acct,
 			Deskripsi:      "Penjualan - " + penjualan.NomorInvoice,
 			Debit:          0,
 			Kredit:         amt,
 			NomorTransaksi: penjualan.NomorInvoice,
+			NomorJurnal:    nomorJurnal,
+			ContactID:      penjualan.CustomerID,
+			ContactType:    "customer",
 		})
 	}
 
@@ -656,36 +789,45 @@ func GenerateSalesGLLines(db *gorm.DB, penjualan models.Penjualan) ([]models.GL,
 			continue
 		}
 		gls = append(gls, models.GL{
-			Tanggal:        now,
+			Tanggal:        trxDate,
 			AkunTransaksi:  acct,
 			Deskripsi:      "Pajak (non-withholding) - " + penjualan.NomorInvoice,
 			Debit:          0,
 			Kredit:         amt,
 			NomorTransaksi: penjualan.NomorInvoice,
+			NomorJurnal:    nomorJurnal,
+			ContactID:      penjualan.CustomerID,
+			ContactType:    "customer",
 		})
 	}
 
 	// Freight credit
 	if totalFreight > 0 {
 		gls = append(gls, models.GL{
-			Tanggal:        now,
+			Tanggal:        trxDate,
 			AkunTransaksi:  accounts.FreightAccount,
 			Deskripsi:      "Freight - " + penjualan.NomorInvoice,
 			Debit:          0,
 			Kredit:         totalFreight,
 			NomorTransaksi: penjualan.NomorInvoice,
+			NomorJurnal:    nomorJurnal,
+			ContactID:      penjualan.CustomerID,
+			ContactType:    "customer",
 		})
 	}
 
 	// Stamp credit
 	if totalStamp > 0 {
 		gls = append(gls, models.GL{
-			Tanggal:        now,
+			Tanggal:        trxDate,
 			AkunTransaksi:  accounts.StampAccount,
 			Deskripsi:      "Stamp - " + penjualan.NomorInvoice,
 			Debit:          0,
 			Kredit:         totalStamp,
 			NomorTransaksi: penjualan.NomorInvoice,
+			NomorJurnal:    nomorJurnal,
+			ContactID:      penjualan.CustomerID,
+			ContactType:    "customer",
 		})
 	}
 

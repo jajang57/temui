@@ -6,6 +6,8 @@ import { Input } from '../../components/ui/input';
 import { useTheme } from '../../context/ThemeContext';
 import api from "../../utils/api";
 import Select from 'react-select';
+import { RemoveRedEye as ViewIcon, FirstPage, LastPage, ChevronLeft, ChevronRight, ArrowUpward, ArrowDownward } from '@mui/icons-material';
+import JournalPreviewModal from '../../components/JournalPreviewModal';
 
 // Tambah util untuk mengambil pesan error dari backend (422)
 const extractApiErrorMessage = (err) => {
@@ -16,15 +18,52 @@ const extractApiErrorMessage = (err) => {
     payload?.error ||
     (Array.isArray(payload?.errors) && payload.errors[0]?.message) ||
     headerMsg ||
-    err?.message ||
-    'Terjadi kesalahan';
-  return typeof msg === 'string' ? msg : JSON.stringify(msg);
+    'Terjadi kesalahan pada server';
+  return msg;
 };
+
+// Styles for React Select
+const selectStyles = (theme) => ({
+  control: (base) => ({
+    ...base,
+    background: theme.fieldColor,
+    color: theme.fontColor,
+    borderColor: theme.inputBorderColor || theme.cardBorderColor,
+    boxShadow: 'none',
+    '&:hover': {
+      borderColor: theme.inputBorderColor || theme.cardBorderColor
+    }
+  }),
+  menu: (base) => ({
+    ...base,
+    background: theme.cardColor,
+    color: theme.fontColor,
+    zIndex: 9999
+  }),
+  option: (provided, state) => ({
+    ...provided,
+    backgroundColor: state.isSelected ? theme.buttonSimpan : state.isFocused ? theme.tableAltRowColor : theme.cardColor,
+    color: state.isSelected ? '#fff' : theme.fontColor,
+    cursor: 'pointer'
+  }),
+  singleValue: (base) => ({
+    ...base,
+    color: theme.fontColor
+  }),
+  input: (base) => ({
+    ...base,
+    color: theme.fontColor
+  }),
+  placeholder: (base) => ({
+    ...base,
+    color: theme.placeholderColor || '#9ca3af'
+  })
+});
 
 export default function Pembelian() {
   const { theme } = useTheme();
-  
-    // States
+
+  // States
   const [masterSupplier, setMasterSupplier] = useState([]);
   const [loadingSupplier, setLoadingSupplier] = useState(true);
   const [listPembelian, setListPembelian] = useState([]);
@@ -37,6 +76,25 @@ export default function Pembelian() {
   const [modalFilter, setModalFilter] = useState("");
   const [saving, setSaving] = useState(false);
   const [loadingList, setLoadingList] = useState(false);
+
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+
+  // Sorting State
+  const [sortBy, setSortBy] = useState("id");
+  const [sortOrder, setSortOrder] = useState("desc");
+
+  // Advanced Filtering State
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+  const [filterSupplier, setFilterSupplier] = useState(null); // { value, label }
+
+  // Journal Preview State
+  const [showJournalModal, setShowJournalModal] = useState(false);
+  const [journalNomorTransaksi, setJournalNomorTransaksi] = useState("");
 
   // ✅ Tambahkan missing editing states:
   const [editingQty, setEditingQty] = useState({});
@@ -118,9 +176,18 @@ export default function Pembelian() {
       ]);
       generateNomorapinvoice();
     };
-    
+
     initializeData();
-  }, []); // ✅ Empty dependency array
+    initializeData();
+  }, []);
+
+  useEffect(() => {
+    // Debounce search or fetch when page/search/limit changes
+    const timer = setTimeout(() => {
+      fetchListPembelian();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [page, search, limit, sortBy, sortOrder, filterStartDate, filterEndDate, filterSupplier]);
 
   // Fetch functions
   const fetchMasterSupplier = async () => {
@@ -168,15 +235,9 @@ export default function Pembelian() {
   };
 
   const generateNomorapinvoice = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    
     setFormData(prev => ({
       ...prev,
-      nomorapinvoice: `apinv-${year}${month}${day}-${random}`
+      nomorapinvoice: "AUTO"
     }));
   };
 
@@ -287,7 +348,7 @@ export default function Pembelian() {
   const handleSave = async () => {
     if (saving) return;
     setSaving(true);
-    
+
     // ✅ Validasi supplier lebih ketat
 
     console.log(formData.supplier);
@@ -296,11 +357,11 @@ export default function Pembelian() {
       setSaving(false);
       return;
     }
-    
+
     const raw = Array.isArray(items) ? items : [];
-    const filtered = raw.filter(d => 
-      d && 
-      String(d.kodeItem).trim() !== "" && 
+    const filtered = raw.filter(d =>
+      d &&
+      String(d.kodeItem).trim() !== "" &&
       Number(d.qty) > 0
     );
 
@@ -377,10 +438,10 @@ export default function Pembelian() {
       const url = editMode ? `/pembelian/${editId}` : '/pembelian';
       const method = editMode ? 'put' : 'post';
       const response = await api[method](url, purchaseData);
-      
+
       if (response.status === 200 || response.status === 201 || response.data?.success) {
         alert(editMode ? 'Data berhasil diupdate!' : 'Data berhasil disimpan!');
-        
+
         if (!editMode) {
           // Reset form setelah create berhasil
           setEditMode(false);
@@ -404,7 +465,7 @@ export default function Pembelian() {
           setEditingDiscAmountItem({});
           generateNomorapinvoice();
         }
-        
+
         fetchListPembelian();
         setShowForm(false);
       } else {
@@ -448,35 +509,45 @@ export default function Pembelian() {
   const fetchListPembelian = async () => {
     setLoadingList(true);
     try {
-      const response = await api.get('/pembelian');
-      setListPembelian(response.data);
+      const response = await api.get('/pembelian', {
+        params: {
+          page: page,
+          limit: limit,
+          search: search,
+          sort_by: sortBy,
+          sort_order: sortOrder,
+          start_date: filterStartDate,
+          end_date: filterEndDate,
+          supplier_id: filterSupplier?.value || ""
+        }
+      });
+      if (response.data.data) {
+        setListPembelian(response.data.data);
+        setTotalPages(response.data.meta.totalPages);
+        setTotalRecords(response.data.meta.total);
+      } else if (Array.isArray(response.data)) {
+        setListPembelian(response.data);
+      } else {
+        setListPembelian([]);
+      }
     } catch (error) {
+      console.error("Failed to fetch pembelian list:", error);
       setListPembelian([]);
     }
     setLoadingList(false);
   };
 
-  // ✅ Safe filteredPembelian with useMemo
-  const filteredPembelian = React.useMemo(() => {
-    if (!Array.isArray(listPembelian)) return [];
-    if (!Array.isArray(masterSupplier)) return listPembelian;
-    
-    return listPembelian.filter(trx => {
-      if (!search) return true;
-      
-      const searchLower = search.toLowerCase();
-      const supplierName = masterSupplier.find(p => 
-        p && String(p.id) === String(trx.supplierId)
-      )?.nama || '';
-      
-      return (
-        (trx.nomorapinvoice && trx.nomorapinvoice.toLowerCase().includes(searchLower)) ||
-        (trx.total && trx.total.toString().includes(search)) ||
-        (trx.status && trx.status.toLowerCase().includes(searchLower)) ||
-        supplierName.toLowerCase().includes(searchLower)
-      );
-    });
-  }, [listPembelian, masterSupplier, search]);
+  const handleSort = (field) => {
+    if (sortBy === field) {
+      setSortOrder(prev => prev === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(field);
+      setSortOrder("asc");
+    }
+  };
+
+  // Safe filteredPembelian - Just pass through since backend filters
+  const filteredPembelian = listPembelian;
 
   // ✅ Improved loading check
   if (loadingSupplier || !Array.isArray(masterSupplier)) {
@@ -503,16 +574,16 @@ export default function Pembelian() {
         stamp: 0
       });
       setItems([]);
-      
+
       // ✅ Reset editing states
       setEditingQty({});
       setEditingPrice({});
       setEditingDiscPercent({});
       setEditingDiscAmountItem({});
-      
+
       const response = await api.get(`/pembelian/${trx.id}`);
       const data = response.data.data || response.data;
-      
+
       const formatDateFromBackend = (isoString) => {
         if (!isoString) return '';
         try {
@@ -523,7 +594,7 @@ export default function Pembelian() {
           return '';
         }
       };
-      
+
       // ✅ Set form data dengan delay untuk memastikan reset selesai
       setTimeout(() => {
         setFormData({
@@ -538,7 +609,7 @@ export default function Pembelian() {
           freight: Number(data.freight || 0),
           stamp: Number(data.stamp || 0)
         });
-        
+
         // ✅ Set items dengan format yang benar
         const details = Array.isArray(data.details) ? data.details : [];
         console.log(details);
@@ -560,12 +631,12 @@ export default function Pembelian() {
           amount: Number(detail.amount || 0),
           gudang: String(detail.gudangId || '')
         })));
-        
+
         setEditMode(true);
         setEditId(trx.id);
         setShowForm(true);
       }, 100); // ✅ Delay 100ms untuk memastikan reset selesai
-      
+
     } catch (error) {
       console.error('Error loading data for edit:', error);
       alert('Gagal memuat data untuk edit!');
@@ -588,7 +659,7 @@ export default function Pembelian() {
   return (
     <div className="p-6 min-h-screen" style={{ background: theme.backgroundColor, color: theme.fontColor, fontFamily: theme.fontFamily }}>
       <h1 className="text-2xl font-bold mb-6">Pembelian - AP Invoice</h1>
-      
+
       <Card className="p-8 rounded-xl shadow-lg mb-8" style={{ background: theme.cardColor, color: theme.fontColor, fontFamily: theme.fontFamily, borderColor: theme.cardBorderColor }}>
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold">
@@ -628,7 +699,7 @@ export default function Pembelian() {
           >
             {showForm ? "Sembunyikan Form" : "Tampilkan Form"}
           </Button>
-        </div>   
+        </div>
 
         {showForm && (
           <div>
@@ -732,7 +803,7 @@ export default function Pembelian() {
                       <th className="border px-2 py-1" style={{ position: 'relative', width: 60 }}>Discount %</th>
                       <th className="border px-2 py-1" style={{ position: 'relative', width: 120 }}>Discount Amount Item</th>
                       <th className="border px-2 py-1" style={{ position: 'relative', width: 120 }}>Discount Amount
-                         <div onMouseDown={e => startResize('discAmount', e)} style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize' }} />
+                        <div onMouseDown={e => startResize('discAmount', e)} style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize' }} />
                       </th>
                       <th className="border px-2 py-1" style={{ position: 'relative', width: columnWidths.tax }}>Pajak
                         <div onMouseDown={e => startResize('tax', e)} style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize' }} />
@@ -916,9 +987,9 @@ export default function Pembelian() {
                         </td>
 
                         <td className="border px-2 py-1 text-right" style={{ width: columnWidths.discAmount }}>
-                          { (Number(item.discAmount || 0)).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+                          {(Number(item.discAmount || 0)).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        
+
                         <td className="border px-2 py-1" style={{ width: columnWidths.tax }}>
                           <Select
                             isMulti
@@ -948,34 +1019,34 @@ export default function Pembelian() {
                         </td>
 
                         <td className="border px-2 py-1 text-right" style={{ width: 90, display: 'none' }}>
-                          { (item.taxamount1 || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+                          {(item.taxamount1 || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td className="border px-2 py-1 text-right" style={{ width: 90, display: 'none' }}>
-                          { (item.taxamount2 || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+                          {(item.taxamount2 || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td className="border px-2 py-1 text-right" style={{ width: 90, display: 'none' }}>
-                          { (item.taxamount3 || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+                          {(item.taxamount3 || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        
+
                         <td className="border px-2 py-1 text-right" style={{ width: columnWidths.dpp }}>
-                          { (item.dpp || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+                          {(item.dpp || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
 
                         <td className="border px-2 py-1 text-right" style={{ width: columnWidths.total }}>
-                          { (item.amount || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+                          {(item.amount || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
 
                         <td className="border px-2 py-1 text-center" style={{ width: columnWidths.aksi }}>
-                          <button 
-                            onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))} 
-                            className="px-2 py-1 rounded" 
+                          <button
+                            onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))}
+                            className="px-2 py-1 rounded"
                             style={{ background: theme.buttonHapus, color: '#fff' }}
                           >
                             X
                           </button>
                         </td>
                       </tr>
-                     ))}
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -984,8 +1055,8 @@ export default function Pembelian() {
             {/* Modal Popup Tambah Item */}
             {showModal && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-                <div className="rounded-lg shadow-lg p-6 min-w-[340px] max-w-[90vw] w-full" style={{background: theme.cardColor, color: theme.fontColor, fontFamily: theme.fontFamily, border: `1px solid ${theme.cardBorderColor}`}}>
-                  <h2 className="text-base font-bold mb-4" style={{color: theme.fontColor}}>Pilih Item</h2>
+                <div className="rounded-lg shadow-lg p-6 min-w-[340px] max-w-[90vw] w-full" style={{ background: theme.cardColor, color: theme.fontColor, fontFamily: theme.fontFamily, border: `1px solid ${theme.cardBorderColor}` }}>
+                  <h2 className="text-base font-bold mb-4" style={{ color: theme.fontColor }}>Pilih Item</h2>
                   <div className="mb-2 flex flex-col gap-2">
                     <input
                       type="text"
@@ -993,16 +1064,16 @@ export default function Pembelian() {
                       value={modalFilter}
                       onChange={e => setModalFilter(e.target.value)}
                       className="px-2 py-1 rounded border text-sm"
-                      style={{background: theme.fieldColor, color: theme.fontColor, fontFamily: theme.fontFamily, borderColor: theme.dropdownColor, minWidth: 180}}
+                      style={{ background: theme.fieldColor, color: theme.fontColor, fontFamily: theme.fontFamily, borderColor: theme.dropdownColor, minWidth: 180 }}
                     />
                   </div>
                   <div className="overflow-x-auto mb-4">
-                    <table className="min-w-max w-full border-collapse text-xs" style={{fontFamily: theme.tableFontFamily}}>
-                      <thead style={{background: theme.tableHeaderColor, color: theme.tableFontColor}}>
+                    <table className="min-w-max w-full border-collapse text-xs" style={{ fontFamily: theme.tableFontFamily }}>
+                      <thead style={{ background: theme.tableHeaderColor, color: theme.tableFontColor }}>
                         <tr>
-                          <th className="px-1 py-1 text-center font-bold border" style={{borderColor: theme.cardBorderColor, fontSize: '0.95em'}}>#</th>
-                          <th className="px-1 py-1 text-center font-bold border" style={{borderColor: theme.cardBorderColor, fontSize: '0.95em'}}>Kode Item</th>
-                          <th className="px-1 py-1 text-center font-bold border" style={{borderColor: theme.cardBorderColor, fontSize: '0.95em'}}>Deskripsi</th>
+                          <th className="px-1 py-1 text-center font-bold border" style={{ borderColor: theme.cardBorderColor, fontSize: '0.95em' }}>#</th>
+                          <th className="px-1 py-1 text-center font-bold border" style={{ borderColor: theme.cardBorderColor, fontSize: '0.95em' }}>Kode Item</th>
+                          <th className="px-1 py-1 text-center font-bold border" style={{ borderColor: theme.cardBorderColor, fontSize: '0.95em' }}>Deskripsi</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1010,27 +1081,27 @@ export default function Pembelian() {
                           item.kode?.toLowerCase().includes(modalFilter.toLowerCase()) ||
                           item.nama?.toLowerCase().includes(modalFilter.toLowerCase())
                         ).map((item, idx) => (
-                          <tr key={item.id} style={{background: idx % 2 === 0 ? theme.tableBodyColor : theme.tableAltRowColor, color: theme.tableFontColor}}>
-                            <td className="px-1 py-1 text-center border" style={{borderColor: theme.cardBorderColor}}>
-                              <input 
-                                type="checkbox" 
-                                checked={selectedModalItems.includes(item.id)} 
+                          <tr key={item.id} style={{ background: idx % 2 === 0 ? theme.tableBodyColor : theme.tableAltRowColor, color: theme.tableFontColor }}>
+                            <td className="px-1 py-1 text-center border" style={{ borderColor: theme.cardBorderColor }}>
+                              <input
+                                type="checkbox"
+                                checked={selectedModalItems.includes(item.id)}
                                 onChange={e => {
                                   setSelectedModalItems(e.target.checked
                                     ? [...selectedModalItems, item.id]
                                     : selectedModalItems.filter(id => id !== item.id));
-                                }} 
+                                }}
                               />
                             </td>
-                            <td className="px-1 py-1 text-center border" style={{borderColor: theme.cardBorderColor}}>{item.kode}</td>
-                            <td className="px-1 py-1 border" style={{borderColor: theme.cardBorderColor}}>{item.nama}</td>
+                            <td className="px-1 py-1 text-center border" style={{ borderColor: theme.cardBorderColor }}>{item.kode}</td>
+                            <td className="px-1 py-1 border" style={{ borderColor: theme.cardBorderColor }}>{item.nama}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                   <div className="flex justify-end gap-2 mt-4">
-                    <Button onClick={() => setShowModal(false)} style={{background: theme.buttonHapus, color: '#fff'}}>Batal</Button>
+                    <Button onClick={() => setShowModal(false)} style={{ background: theme.buttonHapus, color: '#fff' }}>Batal</Button>
                     <Button onClick={() => {
                       const selectedItems = masterBarangJasa.filter(item => selectedModalItems.includes(item.id));
                       const newDetailItems = selectedItems.map((item, idx) => ({
@@ -1045,7 +1116,7 @@ export default function Pembelian() {
                         discAmount: 0,
                         tax: [],
                         taxamount1: 0,
-                        taxamount2: 0, 
+                        taxamount2: 0,
                         taxamount3: 0,
                         dpp: 0,
                         amount: 0,
@@ -1055,7 +1126,7 @@ export default function Pembelian() {
                       setShowModal(false);
                       setSelectedModalItems([]);
                       setModalFilter("");
-                    }} style={{background: theme.buttonSimpan, color: '#fff'}}>Add</Button>
+                    }} style={{ background: theme.buttonSimpan, color: '#fff' }}>Add</Button>
                   </div>
                 </div>
               </div>
@@ -1084,7 +1155,7 @@ export default function Pembelian() {
                   />
                 </div>
               </div>
-              
+
               <div>
                 <div className="rounded-lg p-6 mb-4" style={{ background: theme.cardColor, color: theme.fontColor, fontFamily: theme.fontFamily, border: `1px solid ${theme.cardBorderColor}`, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
                   <div className="flex justify-between items-center mb-2">
@@ -1092,7 +1163,7 @@ export default function Pembelian() {
                     <span className="font-semibold">Rp {calculateSubtotal().toLocaleString('id-ID')}</span>
                   </div>
                   {(() => {
-                     const totalTax1 = items.reduce((sum, item) => sum + (item.taxamount1 || 0), 0);
+                    const totalTax1 = items.reduce((sum, item) => sum + (item.taxamount1 || 0), 0);
                     const totalTax2 = items.reduce((sum, item) => sum + (item.taxamount2 || 0), 0);
                     const totalTax3 = items.reduce((sum, item) => sum + (item.taxamount3 || 0), 0);
                     // Ambil nama pajak sesuai urutan
@@ -1122,7 +1193,7 @@ export default function Pembelian() {
                       </>
                     );
                   })()}
-               
+
                   <div className="flex justify-between items-center mb-2">
                     <span>Freight:</span>
                     <Input type="number" name="freight" value={formData.freight || 0} onChange={handleInputChange} style={{ ...inputStyle(theme), width: 80, textAlign: "right" }} />
@@ -1172,7 +1243,44 @@ export default function Pembelian() {
           Daftar Transaksi Pembelian
         </h2>
 
-        <div className="mb-4">
+        {/* FILTER SECTION */}
+        <div className="p-4 border-b" style={{ borderColor: theme.cardBorderColor }}>
+          <div className="flex flex-col md:flex-row gap-4 mb-4">
+            <div className="flex gap-2 items-center">
+              <span className="text-sm font-semibold" style={{ color: theme.fontColor }}>Periode:</span>
+              <Input
+                type="date"
+                value={filterStartDate}
+                onChange={e => {
+                  setFilterStartDate(e.target.value);
+                  if (e.target.value && !filterEndDate) {
+                    setFilterEndDate(e.target.value);
+                  }
+                }}
+                className="w-40"
+                style={inputStyle(theme)}
+              />
+              <span style={{ color: theme.fontColor }}>s/d</span>
+              <Input
+                type="date"
+                value={filterEndDate}
+                onChange={e => setFilterEndDate(e.target.value)}
+                className="w-40"
+                style={inputStyle(theme)}
+              />
+            </div>
+            <div className="flex-1 max-w-xs">
+              <Select
+                placeholder="Filter Supplier..."
+                options={(masterSupplier || []).map(p => ({ value: p.ID, label: p.nama }))}
+                value={filterSupplier}
+                onChange={setFilterSupplier}
+                isClearable
+                styles={selectStyles(theme)}
+              />
+            </div>
+          </div>
+
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex-1">
               <Input
@@ -1198,11 +1306,36 @@ export default function Pembelian() {
             <thead style={{ background: theme.tableHeaderColor, color: theme.tableFontColor }}>
               <tr>
                 <th className="border px-2 py-1 text-left">No.</th>
-                <th className="border px-2 py-1 text-left">apinvoice No.</th>
-                <th className="border px-2 py-1 text-left">Tanggal</th>
-                <th className="border px-2 py-1 text-left">Supplier</th>
-                <th className="border px-2 py-1 text-right">Total</th>
-                <th className="border px-2 py-1 text-left">Status</th>
+                <th className="border px-2 py-1 text-left cursor-pointer hover:bg-opacity-80" onClick={() => handleSort('nomorAPInvoice')}>
+                  <div className="flex items-center gap-1">
+                    apinvoice No.
+                    {sortBy === 'nomorAPInvoice' && (sortOrder === 'asc' ? <ArrowUpward sx={{ fontSize: 14 }} /> : <ArrowDownward sx={{ fontSize: 14 }} />)}
+                  </div>
+                </th>
+                <th className="border px-2 py-1 text-left cursor-pointer hover:bg-opacity-80" onClick={() => handleSort('tanggal')}>
+                  <div className="flex items-center gap-1">
+                    Tanggal
+                    {sortBy === 'tanggal' && (sortOrder === 'asc' ? <ArrowUpward sx={{ fontSize: 14 }} /> : <ArrowDownward sx={{ fontSize: 14 }} />)}
+                  </div>
+                </th>
+                <th className="border px-2 py-1 text-left cursor-pointer hover:bg-opacity-80" onClick={() => handleSort('supplierNama')}>
+                  <div className="flex items-center gap-1">
+                    Supplier
+                    {sortBy === 'supplierNama' && (sortOrder === 'asc' ? <ArrowUpward sx={{ fontSize: 14 }} /> : <ArrowDownward sx={{ fontSize: 14 }} />)}
+                  </div>
+                </th>
+                <th className="border px-2 py-1 text-right cursor-pointer hover:bg-opacity-80" onClick={() => handleSort('total')}>
+                  <div className="flex items-center justify-end gap-1">
+                    Total
+                    {sortBy === 'total' && (sortOrder === 'asc' ? <ArrowUpward sx={{ fontSize: 14 }} /> : <ArrowDownward sx={{ fontSize: 14 }} />)}
+                  </div>
+                </th>
+                <th className="border px-2 py-1 text-left cursor-pointer hover:bg-opacity-80" onClick={() => handleSort('status')}>
+                  <div className="flex items-center gap-1">
+                    Status
+                    {sortBy === 'status' && (sortOrder === 'asc' ? <ArrowUpward sx={{ fontSize: 14 }} /> : <ArrowDownward sx={{ fontSize: 14 }} />)}
+                  </div>
+                </th>
                 <th className="border px-2 py-1 text-left">Aksi</th>
               </tr>
             </thead>
@@ -1213,13 +1346,23 @@ export default function Pembelian() {
                   <td className="border px-2 py-1">{trx.nomorapinvoice}</td>
                   <td className="border px-2 py-1">{trx.tanggal ? new Date(trx.tanggal).toLocaleDateString('id-ID') : ''}</td>
                   <td className="border px-2 py-1">
-                    {masterSupplier.find(p => String(p.id) === String(trx.supplierId))?.nama || '-'}  {/* ✅ Ganti dari p.ID ke p.id */}
+                    {trx.supplierNama || '-'}
                   </td>
                   <td className="border px-2 py-1 text-right">Rp {trx.total?.toLocaleString('id-ID')}</td>
                   <td className="border px-2 py-1">
                     <span className="px-2 py-1 rounded bg-green-100 text-green-700 text-xs font-semibold">{trx.status}</span>
                   </td>
                   <td className="border px-2 py-1 flex gap-2">
+                    <Button
+                      style={{ background: theme.buttonUpdate, color: "#fff", fontWeight: "bold", borderRadius: 6, fontSize: 12, padding: "2px 8px" }}
+                      onClick={() => {
+                        setJournalNomorTransaksi(trx.nomorapinvoice);
+                        setShowJournalModal(true);
+                      }}
+                      title="Lihat Jurnal"
+                    >
+                      <ViewIcon sx={{ fontSize: 16 }} />
+                    </Button>
                     <Button
                       style={{ background: theme.buttonUpdate, color: "#fff", fontWeight: "bold", borderRadius: 6, fontSize: 12, padding: "2px 12px" }}
                       onClick={() => handleEdit(trx)}
@@ -1238,7 +1381,87 @@ export default function Pembelian() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls */}
+        {/* Pagination Controls */}
+        <div className="flex flex-col md:flex-row justify-between items-center mt-4 gap-4">
+          {/* Rows Per Page & Showing Text */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold" style={{ color: theme.fontColor }}>Show</span>
+              <select
+                value={limit}
+                onChange={(e) => {
+                  setLimit(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="border rounded p-1 text-sm"
+                style={{ background: theme.fieldColor, color: theme.fontColor, borderColor: theme.cardBorderColor }}
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span className="text-sm font-semibold" style={{ color: theme.fontColor }}>rows per page</span>
+            </div>
+
+            <span className="text-sm" style={{ color: theme.fontColor }}>
+              Showing {(page - 1) * limit + 1} to {Math.min(page * limit, totalRecords)} of {totalRecords} records
+            </span>
+          </div>
+
+          {/* Navigation Buttons */}
+          <div className="flex gap-1">
+            <Button
+              disabled={page <= 1}
+              onClick={() => setPage(1)}
+              style={{ background: theme.buttonUpdate, color: "#fff", opacity: page <= 1 ? 0.5 : 1, minWidth: 32, padding: "4px 8px" }}
+              title="First Page"
+            >
+              <FirstPage sx={{ fontSize: 16 }} />
+            </Button>
+            <Button
+              disabled={page <= 1}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              style={{ background: theme.buttonUpdate, color: "#fff", opacity: page <= 1 ? 0.5 : 1, minWidth: 32, padding: "4px 8px" }}
+              title="Previous Page"
+            >
+              <ChevronLeft sx={{ fontSize: 16 }} />
+            </Button>
+
+            <div className="flex items-center px-4">
+              <span className="text-sm font-bold px-3 py-1 rounded" style={{ background: theme.buttonSimpan, color: "#fff" }}>
+                {page}
+              </span>
+            </div>
+
+            <Button
+              disabled={page >= totalPages}
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              style={{ background: theme.buttonUpdate, color: "#fff", opacity: page >= totalPages ? 0.5 : 1, minWidth: 32, padding: "4px 8px" }}
+              title="Next Page"
+            >
+              <ChevronRight sx={{ fontSize: 16 }} />
+            </Button>
+            <Button
+              disabled={page >= totalPages}
+              onClick={() => setPage(totalPages)}
+              style={{ background: theme.buttonUpdate, color: "#fff", opacity: page >= totalPages ? 0.5 : 1, minWidth: 32, padding: "4px 8px" }}
+              title="Last Page"
+            >
+              <LastPage sx={{ fontSize: 16 }} />
+            </Button>
+          </div>
+        </div>
       </Card>
+
+      <JournalPreviewModal
+        open={showJournalModal}
+        onClose={() => setShowJournalModal(false)}
+        nomorTransaksi={journalNomorTransaksi}
+        title="Jurnal Pembelian"
+      />
     </div>
   );
 }

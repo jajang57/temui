@@ -15,19 +15,19 @@ function getTodayLocal() {
 // Fungsi untuk format angka dengan pemisah ribuan koma dan desimal titik
 function formatNumber(value) {
   if (!value) return '';
-  
+
   // Hapus semua karakter non-digit dan titik desimal
   let cleanValue = value.toString().replace(/[^\d.]/g, '');
-  
+
   // Pastikan hanya ada satu titik desimal
   const parts = cleanValue.split('.');
   if (parts.length > 2) {
     cleanValue = parts[0] + '.' + parts.slice(1).join('');
   }
-  
+
   // Convert ke number
   const numericValue = parseFloat(cleanValue) || 0;
-  
+
   // Format dengan pemisah ribuan (koma) dan desimal (titik) - format internasional
   return new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 2,
@@ -43,33 +43,33 @@ function parseFormattedNumber(value) {
 }
 
 const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
-      // State untuk search dan pagination
-      const [searchText, setSearchText] = useState("");
-      const [currentPage, setCurrentPage] = useState(1);
-      const pageSize = 20;
-    // Fungsi ketika user klik tombol Pilih pada baris penjualan
-        // Fungsi ketika user klik tombol Pilih pada baris pembelian
-        const handlePilihPembelian = (item) => {
-          setForm(prev => ({
-            ...prev,
-            deskripsi: `Pembayaran Pembelian ${item.nomorInvoice}`,
-            kredit: item.total ? item.total.toString() : "",
-            debit: ""
-          }));
-          setFormattedKredit(item.total ? formatNumberWithCommas(item.total) : "");
-          setShowSummaryPopup(false);
-        };
-    const handlePilihPenjualan = (item) => {
-      // Isi deskripsi dan debit otomatis
-      setForm(prev => ({
-        ...prev,
-        deskripsi: `Pembayaran Penjualan ${item.nomorInvoice}`,
-        debit: item.total ? item.total.toString() : "",
-        kredit: ""
-      }));
-      setFormattedDebit(item.total ? formatNumberWithCommas(item.total) : "");
-      setShowSummaryPopup(false);
-    };
+  // State untuk search dan pagination
+  const [searchText, setSearchText] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
+  // Fungsi ketika user klik tombol Pilih pada baris penjualan
+  // Fungsi ketika user klik tombol Pilih pada baris pembelian
+  const handlePilihPembelian = (item) => {
+    setForm(prev => ({
+      ...prev,
+      deskripsi: `Pembayaran Pembelian ${item.nomorInvoice}`,
+      kredit: item.total ? item.total.toString() : "",
+      debit: ""
+    }));
+    setFormattedKredit(item.total ? formatNumberWithCommas(item.total) : "");
+    setShowSummaryPopup(false);
+  };
+  const handlePilihPenjualan = (item) => {
+    // Isi deskripsi dan debit otomatis
+    setForm(prev => ({
+      ...prev,
+      deskripsi: `Pembayaran Penjualan ${item.nomorInvoice}`,
+      debit: item.total ? item.total.toString() : "",
+      kredit: ""
+    }));
+    setFormattedDebit(item.total ? formatNumberWithCommas(item.total) : "");
+    setShowSummaryPopup(false);
+  };
   const { user } = useAuth(); // ✅ FIXED: Add this line
   const { theme } = useTheme(); // tambahkan ini
 
@@ -98,14 +98,14 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
   const [summaryData, setSummaryData] = useState(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [summaryType, setSummaryType] = useState(""); // "penjualan" atau "pembelian"
-  
+
   // State untuk Bulk Import
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [bulkImportFile, setBulkImportFile] = useState(null);
   const [bulkImportData, setBulkImportData] = useState([]);
   const [bulkImportProgress, setBulkImportProgress] = useState({ current: 0, total: 0 });
   const [isBulkImporting, setIsBulkImporting] = useState(false);
-  
+
   // State untuk Audit Trail
   const [showAuditTrailModal, setShowAuditTrailModal] = useState(false);
   const [auditTrailData, setAuditTrailData] = useState([]);
@@ -133,25 +133,25 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
   const handleRowDoubleClick = useCallback((transaksi) => {
     setIsEditMode(true);
     setSelectedTransaksiId(transaksi.id);
-    
+
     // Format tanggal dari ISO string ke YYYY-MM-DD
-    const tanggalFormatted = transaksi.tanggal ? 
-      new Date(transaksi.tanggal).toISOString().split('T')[0] : 
+    const tanggalFormatted = transaksi.tanggal ?
+      new Date(transaksi.tanggal).toISOString().split('T')[0] :
       getTodayLocal();
-    
+
     // Cari COA berdasarkan kode atau ID
     let coaAkunBankValue = transaksi.coaAkunBank || "";
-    
+
     // Jika coaAkunBank adalah kode, cari ID-nya
     const coaByKode = coaList.find(coa => coa.kode === transaksi.coaAkunBank);
     const coaById = coaList.find(coa => String(coa.id) === String(transaksi.coaAkunBank));
-    
+
     if (coaByKode) {
       coaAkunBankValue = String(coaByKode.id);
     } else if (coaById) {
       coaAkunBankValue = String(coaById.id);
     }
-    
+
     const newFormData = {
       noTransaksi: transaksi.noTransaksi || "",
       coaAkunBank: coaAkunBankValue,
@@ -163,13 +163,13 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
       debit: transaksi.debit || "",
       kredit: transaksi.kredit || ""
     };
-    
+
     setForm(newFormData);
-    
+
     // Set nilai yang diformat untuk debit dan kredit
     setFormattedDebit(transaksi.debit ? formatNumber(transaksi.debit) : '');
     setFormattedKredit(transaksi.kredit ? formatNumber(transaksi.kredit) : '');
-    
+
     // Trigger COA change untuk parent component
     if (onCOAChange && coaAkunBankValue) {
       onCOAChange(coaAkunBankValue);
@@ -201,7 +201,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
   // ✅ TAMBAHKAN: Reset khusus untuk delete (tidak reset COA Akun Bank)
   const handleResetAfterDelete = useCallback(() => {
     const currentCoaAkunBank = form.coaAkunBank; // Simpan COA yang sedang dipilih
-    
+
     setForm({
       coaAkunBank: currentCoaAkunBank, // ✅ JANGAN RESET COA AKUN BANK
       noTransaksi: "",
@@ -217,7 +217,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
     setFormattedKredit('');
     setIsEditMode(false);
     setSelectedTransaksiId(null);
-    
+
     // ✅ JANGAN PANGGIL onCOAChange("") supaya filter tidak reset
   }, [form.coaAkunBank]);
 
@@ -263,7 +263,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
             label: `(${coa.kode}) ${coa.nama}`,
             masterCategoryCOA: coa.masterCategoryCOA
           }));
-        
+
         setAkunTransaksiOptions(filteredOptions);
       })
       .catch(() => {
@@ -303,7 +303,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
           tanggal: form.tanggal
         }
       });
-      
+
       setForm(prev => ({
         ...prev,
         noTransaksi: response.data.noTransaksi
@@ -336,26 +336,26 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
     }
 
     try {
-    // Simpan data untuk rollback jika diperlukan
-    const deletedTransaksiData = {
-      id: selectedTransaksiId,
-      noTransaksi: form.noTransaksi,
-      coaAkunBank: form.coaAkunBank
-    };
+      // Simpan data untuk rollback jika diperlukan
+      const deletedTransaksiData = {
+        id: selectedTransaksiId,
+        noTransaksi: form.noTransaksi,
+        coaAkunBank: form.coaAkunBank
+      };
 
-    // Kirim request delete
-    await api.delete(`/input-transaksi/${selectedTransaksiId}`);
-    
-    // Reset form terlebih dahulu
-    handleResetAfterDelete();
-    
-    // Notify parent dengan data yang dihapus untuk update table
-    if (afterSubmit) {
-      afterSubmit(form.coaAkunBank, null, deletedTransaksiData); // ✅ Tambah parameter ke-3
-    }
-    
-    alert("Transaksi berhasil dihapus!");
-    
+      // Kirim request delete
+      await api.delete(`/input-transaksi/${selectedTransaksiId}`);
+
+      // Reset form terlebih dahulu
+      handleResetAfterDelete();
+
+      // Notify parent dengan data yang dihapus untuk update table
+      if (afterSubmit) {
+        afterSubmit(form.coaAkunBank, null, deletedTransaksiData); // ✅ Tambah parameter ke-3
+      }
+
+      alert("Transaksi berhasil dihapus!");
+
     } catch (err) {
       console.error("Error deleting transaksi:", err);
       const errorMsg = err.response?.data?.message || err.message || "Gagal menghapus transaksi";
@@ -370,13 +370,13 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
   };
 
   // Fungsi untuk fetch summary penjualan
-    // Reset search & page saat popup dibuka
-    useEffect(() => {
-      if (showSummaryPopup) {
-        setSearchText("");
-        setCurrentPage(1);
-      }
-    }, [showSummaryPopup]);
+  // Reset search & page saat popup dibuka
+  useEffect(() => {
+    if (showSummaryPopup) {
+      setSearchText("");
+      setCurrentPage(1);
+    }
+  }, [showSummaryPopup]);
   const fetchSummaryPenjualan = async () => {
     setLoadingSummary(true);
     setSummaryType("penjualan");
@@ -434,7 +434,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
           tanggal: tanggal
         }
       });
-      
+
       // Tambahkan suffix -tukar
       return response.data.noTransaksi;
     } catch (error) {
@@ -447,9 +447,9 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
   const handleBulkImportFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
+
     setBulkImportFile(file);
-    
+
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
@@ -458,23 +458,23 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
-        
+
         // Validasi format Excel
         if (jsonData.length === 0) {
           alert("File Excel kosong!");
           return;
         }
-        
+
         // Expected columns: Tanggal, Akun Transaksi, Debit, Kredit, Deskripsi, Project No
         const requiredColumns = ['Tanggal', 'Akun Transaksi', 'Deskripsi'];
         const firstRow = jsonData[0];
         const missingColumns = requiredColumns.filter(col => !(col in firstRow));
-        
+
         if (missingColumns.length > 0) {
           alert(`Kolom berikut tidak ditemukan: ${missingColumns.join(', ')}\n\nFormat yang benar:\nTanggal | Akun Transaksi | Debit | Kredit | Deskripsi | Project No`);
           return;
         }
-        
+
         setBulkImportData(jsonData);
       } catch (error) {
         console.error("Error reading Excel file:", error);
@@ -490,23 +490,23 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
       alert("Pilih COA Akun Bank terlebih dahulu!");
       return;
     }
-    
+
     if (bulkImportData.length === 0) {
       alert("Tidak ada data untuk diimport!");
       return;
     }
-    
+
     setIsBulkImporting(true);
     setBulkImportProgress({ current: 0, total: bulkImportData.length });
-    
+
     let successCount = 0;
     let failCount = 0;
     const errors = [];
-    
+
     for (let i = 0; i < bulkImportData.length; i++) {
       const row = bulkImportData[i];
       setBulkImportProgress({ current: i + 1, total: bulkImportData.length });
-      
+
       try {
         // Convert tanggal ke format YYYY-MM-DD
         let tanggal = row['Tanggal'];
@@ -518,7 +518,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
           const date = new Date(tanggal);
           tanggal = date.toISOString().split('T')[0]; // Format: YYYY-MM-DD
         }
-        
+
         // Generate nomor transaksi
         const selectedCOA = coaList.find(coa => String(coa.id) === String(form.coaAkunBank));
         const noTransaksiResponse = await api.get("/generate-no-transaksi", {
@@ -528,7 +528,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
             tanggal: tanggal
           }
         });
-        
+
         const dataToSend = {
           coaAkunBank: selectedCOA.kode,
           noTransaksi: noTransaksiResponse.data.noTransaksi,
@@ -540,7 +540,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
           projectNo: row['Project No'] ? String(row['Project No']) : "",
           projectName: ""
         };
-        
+
         await api.post("/input-transaksi", dataToSend);
         successCount++;
       } catch (error) {
@@ -548,20 +548,20 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
         errors.push(`Baris ${i + 2}: ${error.response?.data?.error || error.message}`);
       }
     }
-    
+
     setIsBulkImporting(false);
-    
+
     if (errors.length > 0) {
       alert(`Import selesai!\nBerhasil: ${successCount}\nGagal: ${failCount}\n\nError:\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...dan ' + (errors.length - 5) + ' error lainnya' : ''}`);
     } else {
       alert(`Import berhasil! ${successCount} transaksi telah ditambahkan.`);
     }
-    
+
     // Refresh table
     if (afterSubmit) {
       afterSubmit(form.coaAkunBank);
     }
-    
+
     // Reset
     setBulkImportData([]);
     setBulkImportFile(null);
@@ -574,10 +574,10 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
       alert("Pilih transaksi terlebih dahulu dengan double-click untuk melihat audit trail!");
       return;
     }
-    
+
     setLoadingAuditTrail(true);
     setShowAuditTrailModal(true);
-    
+
     try {
       const response = await api.get(`/input-transaksi/${selectedTransaksiId}/audit`);
       setAuditTrailData(response.data || []);
@@ -600,19 +600,19 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
   // ✅ ADD: Missing function
   function formatNumberWithCommas(value) {
     if (!value) return '';
-    
+
     // Remove any non-digit characters except decimal point
     let cleanValue = value.toString().replace(/[^\d.]/g, '');
-    
+
     // Ensure only one decimal point
     const parts = cleanValue.split('.');
     if (parts.length > 2) {
       cleanValue = parts[0] + '.' + parts.slice(1).join('');
     }
-    
+
     // Convert to number and format
     const numericValue = parseFloat(cleanValue) || 0;
-    
+
     // Format with commas as thousand separators
     return new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 0,
@@ -623,16 +623,16 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
   // ✅ FIXED: Enhanced handleChange
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+
     // ✅ ENHANCED: Debug COA change
     if (name === "coaAkunBank") {
       const selectedCOA = coaList.find(coa => String(coa.id) === String(value));
-      
+
       if (onCOAChange) {
         onCOAChange(value);
       }
     }
-    
+
     // ✅ FIXED: Handle project selection
     if (name === "projectNo") {
       const selectedProject = projectList.find(project => project.kode_project === value);
@@ -643,31 +643,31 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
       });
       return;
     }
-    
+
     // ✅ FIXED: Handle debit input
     if (name === "debit") {
       // Allow user to type freely
       setFormattedDebit(value);
-      
+
       // Parse for internal storage
       const numericValue = parseFormattedNumber(value);
-      
+
       setForm({ ...form, debit: numericValue });
       return;
     }
-    
+
     // ✅ FIXED: Handle kredit input
     if (name === "kredit") {
       // Allow user to type freely
       setFormattedKredit(value);
-      
+
       // Parse for internal storage
       const numericValue = parseFormattedNumber(value);
-      
+
       setForm({ ...form, kredit: numericValue });
       return;
     }
-    
+
     // ✅ Default case
     setForm({ ...form, [name]: value });
   };
@@ -702,18 +702,18 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Validasi: pastikan salah satu dari debit atau kredit diisi
     if ((!form.debit || form.debit === "0") && (!form.kredit || form.kredit === "0")) {
       alert("Harap isi salah satu dari Debit atau Kredit");
       return;
     }
-    
+
     try {
       // Cari kode COA Bank berdasarkan ID yang dipilih
       const selectedCOA = coaList.find(coa => String(coa.id) === String(form.coaAkunBank));
       const coaBankKode = selectedCOA ? selectedCOA.kode : form.coaAkunBank;
-      
+
       const dataToSend = {
         ...form,
         coaAkunBank: coaBankKode, // Gunakan kode, bukan ID
@@ -721,16 +721,16 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
         debit: form.debit ? parseFloat(form.debit) : 0,
         kredit: form.kredit ? parseFloat(form.kredit) : 0,
       };
-      
+
       console.log("🔍 TEMP DEBUG - Data yang akan dikirim ke backend:", dataToSend);
-      
+
       if (isEditMode && selectedTransaksiId) {
         // Mode Edit - tidak ada transaksi ganda saat edit
         console.log("🔍 TEMP DEBUG - Melakukan PUT request ke:", `/input-transaksi/${selectedTransaksiId}`);
         const response = await api.put(`/input-transaksi/${selectedTransaksiId}`, dataToSend);
         console.log("🔍 TEMP DEBUG - Backend response setelah PUT:", response.data);
         alert("Transaksi berhasil diupdate!");
-        
+
         // ✅ ENHANCED: Pass updated transaksi data
         if (afterSubmit) {
           afterSubmit(coaBankKode, {
@@ -744,32 +744,32 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
             deskripsi: form.deskripsi
           });
         }
-        
+
         handleResetAfterDelete();
       } else {
         // Mode Create
         const isKasBank = isAkunTransaksiKasBank(form.akunTransaksi);
-        
+
         // Simpan transaksi pertama (normal)
         const response1 = await api.post("/input-transaksi", dataToSend);
-        
+
         // Jika akun transaksi adalah kas & bank, buat transaksi kedua
         if (isKasBank) {
           // Cari data COA untuk akun transaksi
           const akunTransaksiCOA = masterCoaList.find(coa => String(coa.kode) === String(form.akunTransaksi));
-          
+
           if (akunTransaksiCOA) {
             // Generate nomor transaksi untuk transaksi tukar
             const noTransaksiTukar = await generateNoTransaksiTukar(
-              akunTransaksiCOA.kode, 
-              form.tanggal, 
-              user.id, 
+              akunTransaksiCOA.kode,
+              form.tanggal,
+              user.id,
               form.noTransaksi
             );
-            
+
             // Cari ID COA untuk akun transaksi tukar (yang sekarang jadi COA Akun Bank)
             const coaBankAsli = coaList.find(coa => String(coa.id) === String(form.coaAkunBank));
-            
+
             // Buat transaksi kedua (tukar)
             const dataToSendTukar = {
               noTransaksi: noTransaksiTukar,
@@ -782,9 +782,9 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
               debit: form.kredit ? parseFloat(form.kredit) : 0, // Tukar
               kredit: form.debit ? parseFloat(form.debit) : 0,  // Tukar
             };
-            
+
             const response2 = await api.post("/input-transaksi", dataToSendTukar);
-            
+
             alert("2 Transaksi berhasil disimpan (normal + tukar)!");
           } else {
             alert("Transaksi normal berhasil disimpan! (COA akun transaksi tidak ditemukan untuk tukar)");
@@ -792,7 +792,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
         } else {
           alert("Transaksi berhasil disimpan!");
         }
-        
+
         // Trigger refresh table & jump ke transaksi terbaru setelah create
         if (afterSubmit && response1 && response1.data) {
           afterSubmit(form.coaAkunBank, response1.data);
@@ -821,7 +821,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
           setTimeout(() => generateNoTransaksi(), 100);
         }
       }
-      
+
       // if (afterSubmit) afterSubmit(form.coaAkunBank, {
       //   // ... HAPUS SELURUH BLOCK INI
       // }); // PANGGIL LANGSUNG SETELAH SIMPAN
@@ -835,17 +835,17 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
     if (!Array.isArray(projectList)) {
       return <option value="" disabled>Data tidak valid</option>;
     }
-    
+
     if (projectList.length === 0) {
       return <option value="" disabled>Tidak ada data project</option>;
     }
-    
+
     return projectList.map((project, index) => {
       // ✅ FIXED: Check both uppercase and lowercase ID
       const projectId = project.ID || project.id;
       const projectKode = project.kode_project;
       const projectNama = project.nama_project;
-      
+
       if (!projectId || !projectKode) {
         return (
           <option key={`missing-${index}`} value="" disabled>
@@ -853,7 +853,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
           </option>
         );
       }
-      
+
       return (
         <option key={projectId} value={projectKode}>
           {projectKode} - {projectNama || 'Nama tidak tersedia'}
@@ -891,7 +891,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
           </div>
         </div>
       )}
-      
+
       <form
         className="space-y-4 w-full rounded shadow p-6 mt-4"
         style={{
@@ -919,7 +919,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
                   ...form,
                   coaAkunBank: newValue
                 });
-                
+
                 if (onCOAChange) {
                   onCOAChange(newValue);
                 }
@@ -1149,7 +1149,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
                 <button
                   type="button"
                   onClick={() => {
-                    setForm({...form, debit: ""});
+                    setForm({ ...form, debit: "" });
                     setFormattedDebit("");
                   }}
                   style={{
@@ -1190,7 +1190,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
                 <button
                   type="button"
                   onClick={() => {
-                    setForm({...form, kredit: ""});
+                    setForm({ ...form, kredit: "" });
                     setFormattedKredit("");
                   }}
                   style={{
@@ -1348,11 +1348,11 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
 
       {/* Summary Popup */}
       {showSummaryPopup && summaryData && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
           onClick={() => setShowSummaryPopup(false)}
         >
-          <div 
+          <div
             className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-auto"
             style={{
               background: theme.backgroundFieldset,
@@ -1362,7 +1362,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div 
+            <div
               className="sticky top-0 px-6 py-4 border-b flex justify-between items-center"
               style={{
                 background: summaryType === "penjualan" ? "#10b981" : "#ef4444",
@@ -1427,7 +1427,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
                         const paged = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
                         if (paged.length > 0) {
                           return paged.map((item, idx) => (
-                            <tr 
+                            <tr
                               key={idx}
                               style={{
                                 background: idx % 2 === 0 ? theme.fieldColor : theme.backgroundFieldset,
@@ -1517,7 +1517,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
             </div>
 
             {/* Footer */}
-            <div 
+            <div
               className="sticky bottom-0 px-6 py-4 border-t flex justify-end"
               style={{
                 background: theme.backgroundFieldset,
@@ -1541,11 +1541,11 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
 
       {/* 📤 BULK IMPORT MODAL */}
       {showBulkImportModal && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
           onClick={() => !isBulkImporting && setShowBulkImportModal(false)}
         >
-          <div 
+          <div
             className="rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-auto border"
             style={{
               background: theme.formColor,
@@ -1556,7 +1556,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div 
+            <div
               className="sticky top-0 px-6 py-4 border-b flex justify-between items-center"
               style={{
                 background: "#10b981",
@@ -1584,7 +1584,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
                   <button
                     type="button"
                     onClick={() => {
-                      window.location.href = `${import.meta.env.VITE_API_URL}/input-transaksi/bulk-import-template`;
+                      window.location.href = `${(import.meta.env.VITE_API_URL || "/api")}/input-transaksi/bulk-import-template`;
                     }}
                     className="px-4 py-2 rounded text-sm"
                     style={{
@@ -1641,7 +1641,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
                             const date = new Date(displayTanggal);
                             displayTanggal = date.toISOString().split('T')[0];
                           }
-                          
+
                           return (
                             <tr key={idx} className="border-b">
                               <td className="px-2 py-1">{idx + 1}</td>
@@ -1670,10 +1670,10 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
                     <span>{bulkImportProgress.current} / {bulkImportProgress.total}</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-4">
-                    <div 
+                    <div
                       className="bg-green-500 h-4 rounded-full transition-all duration-300"
-                      style={{ 
-                        width: `${(bulkImportProgress.current / bulkImportProgress.total) * 100}%` 
+                      style={{
+                        width: `${(bulkImportProgress.current / bulkImportProgress.total) * 100}%`
                       }}
                     ></div>
                   </div>
@@ -1682,7 +1682,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
             </div>
 
             {/* Footer */}
-            <div 
+            <div
               className="sticky bottom-0 px-6 py-4 border-t flex justify-end gap-2"
               style={{
                 background: theme.backgroundFieldset,
@@ -1719,11 +1719,11 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
 
       {/* 📋 AUDIT TRAIL MODAL */}
       {showAuditTrailModal && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
           onClick={() => setShowAuditTrailModal(false)}
         >
-          <div 
+          <div
             className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-auto"
             style={{
               background: theme.backgroundFieldset,
@@ -1733,7 +1733,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div 
+            <div
               className="sticky top-0 px-6 py-4 border-b flex justify-between items-center"
               style={{
                 background: "#3b82f6",
@@ -1758,8 +1758,8 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
               ) : (
                 <div className="space-y-4">
                   {auditTrailData.map((audit, idx) => (
-                    <div 
-                      key={idx} 
+                    <div
+                      key={idx}
                       className="border rounded p-4"
                       style={{
                         background: theme.fieldColor,
@@ -1768,7 +1768,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
                     >
                       <div className="flex justify-between items-start mb-2">
                         <div>
-                          <span 
+                          <span
                             className="px-3 py-1 rounded text-white text-sm font-bold"
                             style={{
                               background: audit.action === "DELETE" ? "#ef4444" : audit.action === "UPDATE" ? "#f59e0b" : "#10b981"
@@ -1794,7 +1794,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
             </div>
 
             {/* Footer */}
-            <div 
+            <div
               className="sticky bottom-0 px-6 py-4 border-t flex justify-end"
               style={{
                 background: theme.backgroundFieldset,

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temui Launcher</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+            margin-left: 10px;
+        }
+
+        .status-running {
+            background: #28a745;
+        }
+
+        .status-stopped {
+            background: #dc3545;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-start {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-start:hover:not(:disabled) {
+            background: #218838;
+        }
+
+        .btn-stop {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-stop:hover:not(:disabled) {
+            background: #c82333;
+        }
+
+        .btn-open {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-open:hover:not(:disabled) {
+            background: #0069d9;
+        }
+
+        .btn-settings {
+            background: #6c757d;
+            color: white;
+            padding: 8px 15px;
+            font-size: 14px;
+        }
+
+        .settings-panel {
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            margin-bottom: 20px;
+            display: none;
+            text-align: left;
+        }
+
+        .settings-panel h3 {
+            margin-top: 0;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 3px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+
+        .settings-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .btn-save {
+            background: #28a745;
+            color: white;
+            font-size: 14px;
+        }
+
+        .log-panel {
+            flex: 1;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .log-line {
+            margin: 2px 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .log-error {
+            color: #f48771;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="card">
+        <div class="header">
+            <span class="logo">Temui Launcher</span>
+            <span id="statusBadge" class="status-badge status-stopped">STOPPED</span>
+        </div>
+
+        <div class="controls">
+            <button id="btnStart" class="btn-start" onclick="startBackend()">Start Server</button>
+            <button id="btnStop" class="btn-stop" onclick="stopBackend()" disabled>Stop Server</button>
+            <button id="btnOpen" class="btn-open" onclick="openBrowser()" disabled>Open App</button>
+        </div>
+        <div id="portInfo" style="font-size: 12px; color: #666; margin-top: 5px;">
+            Port: 8080 | Mode: Production
+        </div>
+        <div style="margin-top: 15px;">
+            <button class="btn-settings" onclick="toggleSettings()">⚙️ Database Settings</button>
+        </div>
+    </div>
+
+    <div id="settingsPanel" class="settings-panel">
+        <div id="pinEntry">
+            <h3>🔐 Enter Passcode</h3>
+            <div class="form-group">
+                <input type="password" id="inputPin" placeholder="Enter PIN">
+            </div>
+            <div class="settings-actions">
+                <button class="btn-save" onclick="checkPin()">Enter</button>
+                <button class="btn-settings" onclick="toggleSettings()">Cancel</button>
+            </div>
+        </div>
+
+        <div id="settingsContent" style="display:none;">
+            <h3>Server & Database Configuration</h3>
+            <div class="form-group">
+                <label>App Mode (client/consultant)</label>
+                <input type="text" id="env_APP_MODE">
+            </div>
+            <div class="form-group">
+                <label>JWT Secret</label>
+                <input type="text" id="env_JWT_SECRET">
+            </div>
+            <div class="form-group">
+                <label>Backend Port</label>
+                <input type="text" id="env_PORT">
+            </div>
+            <hr style="margin: 15px 0; border: 0; border-top: 1px solid #eee;">
+            <div class="form-group">
+                <label>DB Host</label>
+                <input type="text" id="env_DB_HOST">
+            </div>
+            <div class="form-group">
+                <label>DB Port</label>
+                <input type="text" id="env_DB_PORT">
+            </div>
+            <div class="form-group">
+                <label>DB User</label>
+                <input type="text" id="env_DB_USER">
+            </div>
+            <div class="form-group">
+                <label>DB Password</label>
+                <input type="password" id="env_DB_PASSWORD">
+            </div>
+            <div class="form-group">
+                <label>DB Name</label>
+                <input type="text" id="env_DB_NAME">
+            </div>
+            <div class="settings-actions">
+                <button class="btn-save" onclick="saveSettings()">Save & Close</button>
+                <button class="btn-settings" onclick="toggleSettings()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="log-panel" id="logPanel">
+        <div class="log-line">--- Ready to start temui ---</div>
+    </div>
+
+    <script src="/wails/ipc.js"></script>
+    <script src="/wails/runtime.js"></script>
+    <script>
+        // Start Backend
+        function startBackend() {
+            window.go.main.App.StartBackend().then(result => {
+                log("INFO: " + result);
+            });
+        }
+
+        // Stop Backend
+        function stopBackend() {
+            window.go.main.App.StopBackend().then(result => {
+                log("INFO: " + result);
+            });
+        }
+
+        // Open Browser
+        function openBrowser() {
+            window.go.main.App.OpenBrowser();
+        }
+
+        // --- Settings Logic ---
+        let isSettingsOpen = false;
+
+        function toggleSettings() {
+            const panel = document.getElementById("settingsPanel");
+            const pinEntry = document.getElementById("pinEntry");
+            const content = document.getElementById("settingsContent");
+
+            isSettingsOpen = !isSettingsOpen;
+            panel.style.display = isSettingsOpen ? "block" : "none";
+
+            if (isSettingsOpen) {
+                pinEntry.style.display = "block";
+                content.style.display = "none";
+                document.getElementById("inputPin").value = "";
+            }
+        }
+
+        function checkPin() {
+            const pin = document.getElementById("inputPin").value;
+            if (pin === "12Maktab!") { // Updated PIN
+                document.getElementById("pinEntry").style.display = "none";
+                document.getElementById("settingsContent").style.display = "block";
+                loadSettings();
+            } else {
+                alert("Incorrect Passcode!");
+            }
+        }
+
+        function loadSettings() {
+            window.go.main.App.GetEnv().then(config => {
+                const keys = ['DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME', 'PORT', 'APP_MODE', 'JWT_SECRET'];
+                keys.forEach(key => {
+                    const input = document.getElementById("env_" + key);
+                    if (input) input.value = config[key] || (key === 'PORT' ? '8080' : "");
+                });
+                // Update display
+                document.getElementById("portInfo").innerText = `Port: ${config['PORT'] || '8080'} | Mode: Production`;
+            });
+        }
+
+        function saveSettings() {
+            const keys = ['DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME', 'PORT', 'APP_MODE', 'JWT_SECRET'];
+            const config = {};
+            keys.forEach(key => {
+                const input = document.getElementById("env_" + key);
+                if (input) config[key] = input.value;
+            });
+
+            window.go.main.App.SaveEnv(config).then(result => {
+                log("INFO: " + result);
+                if (result.includes("successfully")) {
+                    toggleSettings();
+                }
+            });
+        }
+
+        // Logger Helper
+        function log(message) {
+            const panel = document.getElementById("logPanel");
+            const line = document.createElement("div");
+            line.className = "log-line";
+            if (message.includes("ERROR") || message.includes("Failed")) {
+                line.classList.add("log-error");
+            }
+            line.innerText = `[${new Date().toLocaleTimeString()}] ${message}`;
+            panel.appendChild(line);
+            panel.scrollTop = panel.scrollHeight;
+        }
+
+        // Update UI State
+        function updateStatus(status) {
+            const badge = document.getElementById("statusBadge");
+            const btnStart = document.getElementById("btnStart");
+            const btnStop = document.getElementById("btnStop");
+            const btnOpen = document.getElementById("btnOpen");
+
+            if (status === "running") {
+                badge.innerText = "RUNNING";
+                badge.className = "status-badge status-running";
+                btnStart.disabled = true;
+                btnStop.disabled = false;
+                btnOpen.disabled = false;
+            } else {
+                badge.innerText = "STOPPED";
+                badge.className = "status-badge status-stopped";
+                btnStart.disabled = false;
+                btnStop.disabled = true;
+                btnOpen.disabled = true;
+            }
+        }
+
+        // Initialize Wails Events
+        window.runtime.EventsOn("log", (message) => {
+            log(message);
+        });
+
+        window.runtime.EventsOn("status", (status) => {
+            updateStatus(status);
+        });
+
+        // Check status periodically
+        setInterval(() => {
+            if (window.go && window.go.main && window.go.main.App) {
+                window.go.main.App.GetStatus().then(updateStatus);
+            }
+        }, 3000);
+
+        // Initial check
+        setTimeout(() => {
+            if (window.go && window.go.main && window.go.main.App) {
+                window.go.main.App.GetStatus().then(updateStatus);
+            }
+        }, 500);
+
+    </script>
+</body>
+
+</html>

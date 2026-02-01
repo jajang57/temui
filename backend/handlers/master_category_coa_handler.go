@@ -9,8 +9,10 @@ import (
 )
 
 // GET /api/master-category-coa
-func GetMasterCategoryCOA(db *gorm.DB) gin.HandlerFunc {
+// GET /api/master-category-coa
+func GetMasterCategoryCOA(fallbackDB *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB) // Dynamic DB
 		var list []models.MasterCategoryCOA
 		if err := db.Find(&list).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -21,8 +23,9 @@ func GetMasterCategoryCOA(db *gorm.DB) gin.HandlerFunc {
 }
 
 // POST /api/master-category-coa
-func PostMasterCategoryCOA(db *gorm.DB) gin.HandlerFunc {
+func PostMasterCategoryCOA(fallbackDB *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB) // Dynamic DB
 		var cat models.MasterCategoryCOA
 		if err := c.ShouldBindJSON(&cat); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -51,8 +54,9 @@ func PostMasterCategoryCOA(db *gorm.DB) gin.HandlerFunc {
 }
 
 // DELETE /api/master-category-coa/:id
-func DeleteMasterCategoryCOA(db *gorm.DB) gin.HandlerFunc {
+func DeleteMasterCategoryCOA(fallbackDB *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB) // Dynamic DB
 		id := c.Param("id")
 
 		// Validasi ID
@@ -92,8 +96,9 @@ func DeleteMasterCategoryCOA(db *gorm.DB) gin.HandlerFunc {
 }
 
 // PUT /api/master-category-coa/:id
-func UpdateMasterCategoryCOA(db *gorm.DB) gin.HandlerFunc {
+func UpdateMasterCategoryCOA(fallbackDB *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB) // Dynamic DB
 		id := c.Param("id")
 
 		// Validasi ID

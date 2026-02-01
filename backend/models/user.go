@@ -12,9 +12,10 @@ type User struct {
 	Username    string     `json:"username" gorm:"unique;not null"`
 	Password    string     `json:"-" gorm:"not null"` // "-" agar password tidak muncul di JSON response
 	FullName    string     `json:"fullName" gorm:"not null"`
-	ActiveToken string     `json:"-" gorm:"type:text"` // Token aktif untuk device yang sedang login
-	DeviceInfo  string     `json:"-" gorm:"type:text"` // Info device yang sedang login
-	LastLoginAt *time.Time `json:"lastLoginAt"`        // Waktu login terakhir
+	ActiveToken string     `json:"-" gorm:"type:text"`           // Token aktif untuk device yang sedang login
+	DeviceInfo  string     `json:"-" gorm:"type:text"`           // Info device yang sedang login
+	LastLoginAt *time.Time `json:"lastLoginAt"`                  // Waktu login terakhir
+	Role        string     `json:"role" gorm:"default:'client'"` // Role user: 'client' or 'consultant'
 	gorm.Model
 }
 

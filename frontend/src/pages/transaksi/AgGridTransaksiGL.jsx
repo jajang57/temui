@@ -17,13 +17,17 @@ export default function AgGridTransaksiGL() {
   const [noTransaksiFilter, setNoTransaksiFilter] = useState("");
   const [projectNoFilter, setProjectNoFilter] = useState("");
   const [projectNameFilter, setProjectNameFilter] = useState("");
+  const [nomorJurnalFilter, setNomorJurnalFilter] = useState("");
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
 
   // Ambil master COA
-useEffect(() => {
-  api.get('/master-coa').then(res => {
-    setMasterCoaList(Array.isArray(res.data) ? res.data : []);
-  });
-}, []);
+  useEffect(() => {
+    api.get('/master-coa').then(res => {
+      setMasterCoaList(Array.isArray(res.data) ? res.data : []);
+    });
+  }, []);
 
   // Ambil data GL
   useEffect(() => {
@@ -55,23 +59,24 @@ useEffect(() => {
               kredit: row.kredit ?? "",
               balance: row.balance ?? "",
               nomorTransaksi: row.nomorTransaksi || row.no_transaksi || "",
+              nomorJurnal: row.nomorJurnal || row.nomor_jurnal || "",
               projectNo: row.projectNo || row.project_no || "",
               projectName: row.projectName || row.project_name || "",
             };
           })
           // hanya ambil row dengan tanggal valid (bukan null)
-           .sort((a, b) => {
-        return a.nomorTransaksi.localeCompare(b.nomorTransaksi);
-      })
+          .sort((a, b) => {
+            return a.nomorTransaksi.localeCompare(b.nomorTransaksi);
+          })
           .filter(row => row.tanggal);
-          
-            setRows(mapped);
+
+        setRows(mapped);
 
       })
-     
-      .catch(() => {});
+
+      .catch(() => { });
   }, []);
-  
+
   // Helper mapping kode ke nama COA
   const getAkunTransaksiDisplay = (kode) => {
     if (!kode) return '';
@@ -105,11 +110,70 @@ useEffect(() => {
     if (formattedTanggalFilter.length && !formattedTanggalFilter.includes(formatTanggal(row.tanggal))) return false;
     if (akunFilter.length && !akunFilter.includes(row.akunTransaksi)) return false;
     if (deskripsiFilter && !row.deskripsi?.toLowerCase().includes(deskripsiFilter.toLowerCase())) return false;
-    if (noTransaksiFilter.length && !noTransaksiFilter.includes(row.nomorTransaksi)) return false;
+    if (noTransaksiFilter && !row.nomorTransaksi?.toLowerCase().includes(noTransaksiFilter.toLowerCase())) return false;
     if (projectNoFilter && !row.projectNo?.toLowerCase().includes(projectNoFilter.toLowerCase())) return false;
     if (projectNameFilter && !row.projectName?.toLowerCase().includes(projectNameFilter.toLowerCase())) return false;
+    if (nomorJurnalFilter && !row.nomorJurnal?.toLowerCase().includes(nomorJurnalFilter.toLowerCase())) return false;
     return true;
   });
+
+  // Sorting logic
+  const sortedRows = React.useMemo(() => {
+    let sortableRows = [...filteredRows];
+    if (sortConfig.key !== null) {
+      sortableRows.sort((a, b) => {
+        let aVal = a[sortConfig.key];
+        let bVal = b[sortConfig.key];
+
+        // Handle specific field types
+        if (sortConfig.key === "tanggal") {
+          aVal = aVal ? new Date(aVal).getTime() : 0;
+          bVal = bVal ? new Date(bVal).getTime() : 0;
+        } else if (sortConfig.key === "debit" || sortConfig.key === "kredit") {
+          aVal = parseFloat(aVal) || 0;
+          bVal = parseFloat(bVal) || 0;
+        } else {
+          aVal = String(aVal || "").toLowerCase();
+          bVal = String(bVal || "").toLowerCase();
+        }
+
+        if (aVal < bVal) {
+          return sortConfig.direction === "ascending" ? -1 : 1;
+        }
+        if (aVal > bVal) {
+          return sortConfig.direction === "ascending" ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableRows;
+  }, [filteredRows, sortConfig]);
+
+  // Pagination logic
+  const totalPages = Math.ceil(sortedRows.length / rowsPerPage);
+  const currentRowsFiltered = sortedRows.slice(
+    (currentPage - 1) * rowsPerPage,
+    currentPage * rowsPerPage
+  );
+
+  const handleSort = (key) => {
+    let direction = "ascending";
+    if (sortConfig.key === key && sortConfig.direction === "ascending") {
+      direction = "descending";
+    } else if (sortConfig.key === key && sortConfig.direction === "descending") {
+      direction = null;
+      key = null;
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
+  const renderSortIcon = (key) => {
+    if (sortConfig.key !== key) return " ↕️";
+    if (sortConfig.direction === "ascending") return " 🔼";
+    return " 🔽";
+  };
 
   // Export to Excel
   const handleExportExcel = async () => {
@@ -136,6 +200,9 @@ useEffect(() => {
     setNoTransaksiFilter([]);
     setProjectNoFilter("");
     setProjectNameFilter("");
+    setNomorJurnalFilter("");
+    setSortConfig({ key: null, direction: null });
+    setCurrentPage(1);
   };
 
   return (
@@ -218,11 +285,11 @@ useEffect(() => {
             {deskripsiFilter} <span style={{ cursor: "pointer" }} onClick={() => setDeskripsiFilter("")}>×</span>
           </span>
         )}
-        {noTransaksiFilter.length > 0 && noTransaksiFilter.map(val => (
-          <span key={val} className="bg-blue-100 text-blue-700 rounded px-2 py-1 mr-1" style={{ fontSize: 13 }}>
-            {val} <span style={{ cursor: "pointer" }} onClick={() => setNoTransaksiFilter(noTransaksiFilter.filter(no => no !== val))}>×</span>
+        {noTransaksiFilter && (
+          <span className="bg-blue-100 text-blue-700 rounded px-2 py-1 mr-1" style={{ fontSize: 13 }}>
+            {noTransaksiFilter} <span style={{ cursor: "pointer" }} onClick={() => setNoTransaksiFilter("")}>×</span>
           </span>
-        ))}
+        )}
         {projectNoFilter && (
           <span className="bg-blue-100 text-blue-700 rounded px-2 py-1 mr-1" style={{ fontSize: 13 }}>
             {projectNoFilter} <span style={{ cursor: "pointer" }} onClick={() => setProjectNoFilter("")}>×</span>
@@ -231,6 +298,11 @@ useEffect(() => {
         {projectNameFilter && (
           <span className="bg-blue-100 text-blue-700 rounded px-2 py-1 mr-1" style={{ fontSize: 13 }}>
             {projectNameFilter} <span style={{ cursor: "pointer" }} onClick={() => setProjectNameFilter("")}>×</span>
+          </span>
+        )}
+        {nomorJurnalFilter && (
+          <span className="bg-blue-100 text-blue-700 rounded px-2 py-1 mr-1" style={{ fontSize: 13 }}>
+            {nomorJurnalFilter} <span style={{ cursor: "pointer" }} onClick={() => setNomorJurnalFilter("")}>×</span>
           </span>
         )}
         <Button
@@ -263,19 +335,27 @@ useEffect(() => {
           <thead style={{ background: theme.tableHeaderColor, color: theme.tableFontColor }}>
             <tr>
               <th className="border px-2 py-1" style={{ minWidth: 60 }}>No</th>
-              <th className="border px-2 py-1" style={{ position: 'relative', minWidth: 120 }}>
-                Tanggal
-                <span style={{ position: 'absolute', right: 4, top: 4 }}>
+              <th
+                className="border px-2 py-1 cursor-pointer hover:bg-black/5"
+                style={{ position: 'relative', minWidth: 120 }}
+                onClick={() => handleSort("tanggal")}
+              >
+                Tanggal {renderSortIcon("tanggal")}
+                <span style={{ position: 'absolute', right: 4, top: 4 }} onClick={(e) => e.stopPropagation()}>
                   <TanggalDropdownCustomButton
                     rows={rowData}
                     value={tanggalFilter}
-                    onChange={setTanggalFilter}
+                    onChange={(v) => { setTanggalFilter(v); setCurrentPage(1); }}
                   />
                 </span>
               </th>
-              <th className="border px-2 py-1" style={{ position: 'relative', minWidth: 220 }}>
-                Akun Transaksi
-                <span style={{ position: 'absolute', right: 4, top: 4 }}>
+              <th
+                className="border px-2 py-1 cursor-pointer hover:bg-black/5"
+                style={{ position: 'relative', minWidth: 220 }}
+                onClick={() => handleSort("akunTransaksi")}
+              >
+                Akun Transaksi {renderSortIcon("akunTransaksi")}
+                <span style={{ position: 'absolute', right: 4, top: 4 }} onClick={(e) => e.stopPropagation()}>
                   <SimpleDropdownFilterButton
                     filterType="multi-select"
                     options={
@@ -287,20 +367,25 @@ useEffect(() => {
                         }))
                     }
                     value={akunFilter}
-                    onChange={setAkunFilter}
+                    onChange={(v) => { setAkunFilter(v); setCurrentPage(1); }}
                     placeholder="Cari Akun"
                     iconTitle="Filter Nama Akun"
                     dropdownStyle={{ minWidth: 400 }}
                   />
                 </span>
               </th>
-              <th className="border px-2 py-1" style={{ minWidth: 200 }}>
-                Deskripsi
+              <th
+                className="border px-2 py-1 cursor-pointer hover:bg-black/5"
+                style={{ minWidth: 200 }}
+                onClick={() => handleSort("deskripsi")}
+              >
+                Deskripsi {renderSortIcon("deskripsi")}
                 <div>
                   <input
                     type="text"
                     value={deskripsiFilter}
-                    onChange={e => setDeskripsiFilter(e.target.value)}
+                    onChange={e => { setDeskripsiFilter(e.target.value); setCurrentPage(1); }}
+                    onClick={(e) => e.stopPropagation()}
                     placeholder="Cari Deskripsi"
                     className="border rounded px-1 py-0.5 w-full mt-1"
                     style={{
@@ -311,34 +396,76 @@ useEffect(() => {
                   />
                 </div>
               </th>
-              <th className="border px-2 py-1" style={{ minWidth: 120 }}>Debit</th>
-              <th className="border px-2 py-1" style={{ minWidth: 120 }}>Kredit</th>
-              <th className="border px-2 py-1" style={{ position: 'relative', minWidth: 160 }}>
-                Nomor Transaksi
-                <span style={{ position: 'absolute', right: 4, top: 4 }}>
-                  <SimpleDropdownFilterButton
-                    filterType="multi-select"
-                    options={
-                      Array.from(new Set(rowData.map(row => row.nomorTransaksi)))
-                        .filter(Boolean)
-                        .sort()
-                        .map(no => ({ label: no, value: no }))
-                    }
-                    value={noTransaksiFilter}
-                    onChange={setNoTransaksiFilter}
-                    placeholder="Cari No. Transaksi"
-                    iconTitle="Filter Nomor Transaksi"
-                    dropdownStyle={{ minWidth: 220 }}
-                  />
-                </span>
+              <th
+                className="border px-2 py-1 cursor-pointer hover:bg-black/5"
+                style={{ minWidth: 120 }}
+                onClick={() => handleSort("debit")}
+              >
+                Debit {renderSortIcon("debit")}
               </th>
-              <th className="border px-2 py-1" style={{ minWidth: 120 }}>
-                Project No
+              <th
+                className="border px-2 py-1 cursor-pointer hover:bg-black/5"
+                style={{ minWidth: 120 }}
+                onClick={() => handleSort("kredit")}
+              >
+                Kredit {renderSortIcon("kredit")}
+              </th>
+              <th
+                className="border px-2 py-1 cursor-pointer hover:bg-black/5"
+                style={{ minWidth: 160 }}
+                onClick={() => handleSort("nomorJurnal")}
+              >
+                Nomor Jurnal {renderSortIcon("nomorJurnal")}
+                <div>
+                  <input
+                    type="text"
+                    value={nomorJurnalFilter}
+                    onChange={e => { setNomorJurnalFilter(e.target.value); setCurrentPage(1); }}
+                    onClick={(e) => e.stopPropagation()}
+                    placeholder="Cari No. Jurnal"
+                    className="border rounded px-1 py-0.5 w-full mt-1"
+                    style={{
+                      background: theme.fieldColor,
+                      color: theme.fontColor,
+                      fontFamily: theme.fontFamily,
+                    }}
+                  />
+                </div>
+              </th>
+              <th
+                className="border px-2 py-1 cursor-pointer hover:bg-black/5"
+                style={{ position: 'relative', minWidth: 160 }}
+                onClick={() => handleSort("nomorTransaksi")}
+              >
+                Nomor Transaksi {renderSortIcon("nomorTransaksi")}
+                <div>
+                  <input
+                    type="text"
+                    value={noTransaksiFilter}
+                    onChange={e => { setNoTransaksiFilter(e.target.value); setCurrentPage(1); }}
+                    onClick={(e) => e.stopPropagation()}
+                    placeholder="Cari No. Transaksi"
+                    className="border rounded px-1 py-0.5 w-full mt-1"
+                    style={{
+                      background: theme.fieldColor,
+                      color: theme.fontColor,
+                      fontFamily: theme.fontFamily,
+                    }}
+                  />
+                </div>
+              </th>
+              <th
+                className="border px-2 py-1 cursor-pointer hover:bg-black/5"
+                style={{ minWidth: 120 }}
+                onClick={() => handleSort("projectNo")}
+              >
+                Project No {renderSortIcon("projectNo")}
                 <div>
                   <input
                     type="text"
                     value={projectNoFilter}
-                    onChange={e => setProjectNoFilter(e.target.value)}
+                    onChange={e => { setProjectNoFilter(e.target.value); setCurrentPage(1); }}
+                    onClick={(e) => e.stopPropagation()}
                     placeholder="Cari Project No"
                     className="border rounded px-1 py-0.5 w-full mt-1"
                     style={{
@@ -349,13 +476,18 @@ useEffect(() => {
                   />
                 </div>
               </th>
-              <th className="border px-2 py-1" style={{ minWidth: 160 }}>
-                Project Name
+              <th
+                className="border px-2 py-1 cursor-pointer hover:bg-black/5"
+                style={{ minWidth: 160 }}
+                onClick={() => handleSort("projectName")}
+              >
+                Project Name {renderSortIcon("projectName")}
                 <div>
                   <input
                     type="text"
                     value={projectNameFilter}
-                    onChange={e => setProjectNameFilter(e.target.value)}
+                    onChange={e => { setProjectNameFilter(e.target.value); setCurrentPage(1); }}
+                    onClick={(e) => e.stopPropagation()}
                     placeholder="Cari Project Name"
                     className="border rounded px-1 py-0.5 w-full mt-1"
                     style={{
@@ -369,26 +501,126 @@ useEffect(() => {
             </tr>
           </thead>
           <tbody>
-            {filteredRows.map((row, idx) => (
-              <tr key={row.id} style={{ background: theme.tableBodyColor, color: theme.tableFontColor, fontFamily: theme.tableFontFamily }}>
-                <td className="border px-2 py-1">{idx + 1}</td>
-                <td className="border px-2 py-1">{formatTanggal(row.tanggal)}</td>
-                <td className="border px-2 py-1">{getAkunTransaksiDisplay(row.akunTransaksi)}</td>
-                <td className="border px-2 py-1">{row.deskripsi}</td>
-                <td className="border px-2 py-1" style={{ textAlign: "right" }}>
-                  {row.debit !== "" ? Number(row.debit).toLocaleString("id-ID", { minimumFractionDigits: 2 }) : ""}
+            {currentRowsFiltered.length === 0 ? (
+              <tr>
+                <td colSpan={9} className="border px-2 py-4 text-center text-gray-400 italic">
+                  Tidak ada data yang cocok dengan filter
                 </td>
-                <td className="border px-2 py-1" style={{ textAlign: "right" }}>
-                  {row.kredit !== "" ? Number(row.kredit).toLocaleString("id-ID", { minimumFractionDigits: 2 }) : ""}
-                </td>
-                <td className="border px-2 py-1">{row.nomorTransaksi}</td>
-                <td className="border px-2 py-1">{row.projectNo}</td>
-                <td className="border px-2 py-1">{row.projectName}</td>
               </tr>
-            ))}
+            ) : (
+              currentRowsFiltered.map((row, idx) => (
+                <tr
+                  key={row.id}
+                  className="transition-colors hover:bg-blue-50/50"
+                  style={{ background: theme.tableBodyColor, color: theme.tableFontColor, fontFamily: theme.tableFontFamily }}
+                >
+                  <td className="border px-2 py-1 text-center">{(currentPage - 1) * rowsPerPage + idx + 1}</td>
+                  <td className="border px-2 py-1">{formatTanggal(row.tanggal)}</td>
+                  <td className="border px-2 py-1">{getAkunTransaksiDisplay(row.akunTransaksi)}</td>
+                  <td className="border px-2 py-1">{row.deskripsi}</td>
+                  <td className="border px-2 py-1" style={{ textAlign: "right" }}>
+                    {row.debit !== "" ? Number(row.debit).toLocaleString("id-ID", { minimumFractionDigits: 2 }) : ""}
+                  </td>
+                  <td className="border px-2 py-1" style={{ textAlign: "right" }}>
+                    {row.kredit !== "" ? Number(row.kredit).toLocaleString("id-ID", { minimumFractionDigits: 2 }) : ""}
+                  </td>
+                  <td className="border px-2 py-1">{row.nomorJurnal}</td>
+                  <td className="border px-2 py-1">{row.nomorTransaksi}</td>
+                  <td className="border px-2 py-1">{row.projectNo}</td>
+                  <td className="border px-2 py-1">{row.projectName}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Controls */}
+      <Box
+        sx={{
+          mt: 3,
+          p: 2,
+          display: "flex",
+          flexDirection: { xs: "column", md: "row" },
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 2,
+          background: "rgba(0,0,0,0.02)",
+          borderRadius: 2
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <span style={{ fontSize: 13 }}>Show</span>
+          <select
+            value={rowsPerPage}
+            onChange={(e) => {
+              setRowsPerPage(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+            className="border rounded px-1 py-0.5"
+            style={{ background: theme.fieldColor, color: theme.fontColor }}
+          >
+            {[5, 10, 25, 50, 100].map((size) => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
+          <span style={{ fontSize: 13 }}>rows per page</span>
+          <span className="ml-4 text-xs text-gray-400">
+            Showing {(currentPage - 1) * rowsPerPage + 1} to {Math.min(currentPage * rowsPerPage, sortedRows.length)} of {sortedRows.length} records
+          </span>
+        </Box>
+
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <button
+            onClick={() => paginate(1)}
+            disabled={currentPage === 1}
+            className={`px-2 py-1 rounded transition-colors ${currentPage === 1 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-black/5'}`}
+            title="First Page"
+          >⏮️</button>
+          <button
+            onClick={() => paginate(currentPage - 1)}
+            disabled={currentPage === 1}
+            className={`px-2 py-1 rounded transition-colors ${currentPage === 1 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-black/5'}`}
+            title="Previous Page"
+          >◀️</button>
+
+          <Box sx={{ display: "flex", alignItems: "center", mx: 1 }}>
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum;
+              if (totalPages <= 5) pageNum = i + 1;
+              else if (currentPage <= 3) pageNum = i + 1;
+              else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+              else pageNum = currentPage - 2 + i;
+
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => paginate(pageNum)}
+                  className={`w-8 h-8 flex items-center justify-center rounded-full text-sm font-medium transition-all ${currentPage === pageNum
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'hover:bg-black/5'
+                    }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+          </Box>
+
+          <button
+            onClick={() => paginate(currentPage + 1)}
+            disabled={currentPage === totalPages || totalPages === 0}
+            className={`px-2 py-1 rounded transition-colors ${currentPage === totalPages || totalPages === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-black/5'}`}
+            title="Next Page"
+          >▶️</button>
+          <button
+            onClick={() => paginate(totalPages)}
+            disabled={currentPage === totalPages || totalPages === 0}
+            className={`px-2 py-1 rounded transition-colors ${currentPage === totalPages || totalPages === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-black/5'}`}
+            title="Last Page"
+          >⏭️</button>
+        </Box>
+      </Box>
     </Box>
   );
 }

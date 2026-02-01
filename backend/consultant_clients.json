@@ -1,0 +1,8 @@
+[
+  {
+    "id": "client-demo",
+    "name": "PT Demo Client",
+    "url": "http://localhost:8081",
+    "dbConfig": "{\"host\":\"localhost\",\"port\":\"5432\",\"database\":\"akuntan\",\"user\":\"postgres\",\"password\":\"ithITtech\"}"
+  }
+]

@@ -9,8 +9,9 @@ import (
 )
 
 // GET /api/master-coa
-func GetMasterCOA(db *gorm.DB) gin.HandlerFunc {
+func GetMasterCOA(fallbackDB *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB) // Dynamic DB from Middleware
 		var coas []models.MasterCOA
 		// Gunakan Preload agar relasi masterCategoryCOA ikut diambil
 		if err := db.Preload("MasterCategoryCOA").Find(&coas).Error; err != nil {
@@ -22,8 +23,9 @@ func GetMasterCOA(db *gorm.DB) gin.HandlerFunc {
 }
 
 // POST /api/master-coa
-func PostMasterCOA(db *gorm.DB) gin.HandlerFunc {
+func PostMasterCOA(fallbackDB *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB) // Dynamic DB from Middleware
 		var coa models.MasterCOA
 		if err := c.ShouldBindJSON(&coa); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -56,8 +58,9 @@ func PostMasterCOA(db *gorm.DB) gin.HandlerFunc {
 }
 
 // DELETE /api/master-coa/:id
-func DeleteMasterCOA(db *gorm.DB) gin.HandlerFunc {
+func DeleteMasterCOA(fallbackDB *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB) // Dynamic DB from Middleware
 		id := c.Param("id")
 
 		// Validasi ID
@@ -98,8 +101,9 @@ func DeleteMasterCOA(db *gorm.DB) gin.HandlerFunc {
 }
 
 // PUT /api/master-coa/:id
-func UpdateMasterCOA(db *gorm.DB) gin.HandlerFunc {
+func UpdateMasterCOA(fallbackDB *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB) // Dynamic DB from Middleware
 		id := c.Param("id")
 
 		// Validasi ID
@@ -132,8 +136,13 @@ func UpdateMasterCOA(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		if transaksiCount > 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "COA tidak dapat diubah karena sudah digunakan di transaksi"})
-			return
+			// Jika sudah digunakan di transaksi, hanya boleh update mapping arus kas
+			// Cek apakah field kritikal berubah
+			if input.Kode != coa.Kode || input.Nama != coa.Nama ||
+				input.MasterCategoryCOAID != coa.MasterCategoryCOAID || input.SaldoAwal != coa.SaldoAwal {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "COA tidak dapat diubah (Kode, Nama, Kategori, Saldo Awal) karena sudah digunakan di transaksi. Hanya Mapping Arus Kas yang boleh diubah."})
+				return
+			}
 		}
 
 		// Validasi kode tidak boleh kosong
@@ -153,6 +162,8 @@ func UpdateMasterCOA(db *gorm.DB) gin.HandlerFunc {
 		coa.Nama = input.Nama
 		coa.MasterCategoryCOAID = input.MasterCategoryCOAID
 		coa.SaldoAwal = input.SaldoAwal
+		coa.CashflowActivity = input.CashflowActivity
+		coa.CashflowDirection = input.CashflowDirection
 		if err := db.Save(&coa).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -162,8 +173,9 @@ func UpdateMasterCOA(db *gorm.DB) gin.HandlerFunc {
 }
 
 // GET /api/coa-kas-bank
-func GetCOAKasBank(db *gorm.DB) gin.HandlerFunc {
+func GetCOAKasBank(fallbackDB *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB) // Dynamic DB from Middleware
 		var coas []models.MasterCOA
 		// Preload relasi dan filter kategori yang isKasBank = true
 		if err := db.Preload("MasterCategoryCOA").

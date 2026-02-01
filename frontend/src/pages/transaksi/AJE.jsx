@@ -9,7 +9,9 @@ import api from "../../utils/api";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { parse, format } from "date-fns";
-import { useTheme } from "../../context/ThemeContext"; // tambahkan ini di bagian import
+import { useTheme } from "../../context/ThemeContext";
+import { RemoveRedEye as ViewIcon } from '@mui/icons-material';
+import JournalPreviewModal from '../../components/JournalPreviewModal';
 
 export default function AJE() {
   const { theme } = useTheme(); // gunakan theme
@@ -21,6 +23,9 @@ export default function AJE() {
   const [deskripsiFilter, setDeskripsiFilter] = useState(""); // filter text deskripsi
   const [statusPostingFilter, setStatusPostingFilter] = useState([]); // ['posted', 'unposted']
   const [projectList, setProjectList] = useState([]);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [form, setForm] = useState({
     tanggal: "",
     noBukti: "",
@@ -34,6 +39,10 @@ export default function AJE() {
     projectNo: "",
     projectName: ""
   });
+
+  // Journal Preview State
+  const [showJournalModal, setShowJournalModal] = useState(false);
+  const [journalNomorTransaksi, setJournalNomorTransaksi] = useState("");
   // Load daftar COA non kasbank untuk dropdown Nama Akun
   useEffect(() => {
     async function fetchCOA() {
@@ -57,7 +66,8 @@ export default function AJE() {
             (res.data || []).map(row => ({
               ...row,
               saved: true,
-              posted: !!row.posted
+              posted: !!row.posted,
+              tempId: `saved-${row.id}`
             }))
           )
         );
@@ -105,6 +115,7 @@ export default function AJE() {
       projectName: "",
       saved: false,
       posted: false,
+      tempId: `new-${Date.now()}-${Math.random()}`
     };
     let insertIdx = idx;
     if (insertIdx === null) {
@@ -321,6 +332,36 @@ export default function AJE() {
     });
   }
 
+  // Logic Sorting
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    } else if (sortConfig.key === key && sortConfig.direction === 'desc') {
+      key = null;
+      direction = 'asc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedRows = [...filteredRows].sort((a, b) => {
+    if (!sortConfig.key) return 0;
+    const aValue = a[sortConfig.key] || "";
+    const bValue = b[sortConfig.key] || "";
+
+    if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+    if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  // Logic Pagination
+  const indexOfLastRow = currentPage * rowsPerPage;
+  const indexOfFirstRow = indexOfLastRow - rowsPerPage;
+  const currentRowsFiltered = sortedRows.slice(indexOfFirstRow, indexOfLastRow);
+  const totalPages = Math.ceil(sortedRows.length / rowsPerPage);
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
   function formatTanggal(tgl) {
     if (!tgl) return "";
     const [year, month, day] = tgl.split("-");
@@ -346,7 +387,8 @@ export default function AJE() {
       tanggal: todayStr,
       noBukti: newNoBukti,
       saved: false,
-      posted: false
+      posted: false,
+      tempId: `clone-${Date.now()}-${Math.random()}`
     }));
 
     setRows([...rows, ...clonedRows]);
@@ -417,14 +459,18 @@ export default function AJE() {
         >
           <thead style={{ background: theme.tableHeaderColor, color: theme.tableFontColor }}>
             <tr>
-             <th className="border px-2 py-1" style={{ position: 'relative', minWidth: 150 }}>
-              Tanggal
-              <span style={{ position: 'absolute', right: 4, top: 4 }}>
-                <TanggalDropdownCustomButton rows={rows} value={tanggalFilter} onChange={setTanggalFilter} />
-              </span>
-             </th>
               <th className="border px-2 py-1" style={{ position: 'relative', minWidth: 150 }}>
-                No. Bukti
+                <div className="flex items-center justify-center cursor-pointer select-none" onClick={() => handleSort("tanggal")}>
+                  Tanggal {sortConfig.key === "tanggal" ? (sortConfig.direction === "asc" ? "🔼" : "🔽") : "↕️"}
+                </div>
+                <span style={{ position: 'absolute', right: 4, top: 4 }}>
+                  <TanggalDropdownCustomButton rows={rows} value={tanggalFilter} onChange={setTanggalFilter} />
+                </span>
+              </th>
+              <th className="border px-2 py-1" style={{ position: 'relative', minWidth: 150 }}>
+                <div className="flex items-center justify-center cursor-pointer select-none" onClick={() => handleSort("noBukti")}>
+                  No. Bukti {sortConfig.key === "noBukti" ? (sortConfig.direction === "asc" ? "🔼" : "🔽") : "↕️"}
+                </div>
                 <span style={{ position: 'absolute', right: 4, top: 4 }}>
                   <SimpleDropdownFilterButton
                     filterType="multi-select"
@@ -437,7 +483,9 @@ export default function AJE() {
                 </span>
               </th>
               <th className="border px-2 py-1" style={{ position: 'relative', minWidth: 220 }}>
-                Nama Akun
+                <div className="flex items-center justify-center cursor-pointer select-none" onClick={() => handleSort("namaAkun")}>
+                  Nama Akun {sortConfig.key === "namaAkun" ? (sortConfig.direction === "asc" ? "🔼" : "🔽") : "↕️"}
+                </div>
                 <span style={{ position: 'absolute', right: 4, top: 4 }}>
                   <SimpleDropdownFilterButton
                     filterType="multi-select"
@@ -457,8 +505,10 @@ export default function AJE() {
                   />
                 </span>
               </th>
-               <th className="border px-2 py-1" style={{ position: 'relative' }}>
-                Deskripsi
+              <th className="border px-2 py-1" style={{ position: 'relative' }}>
+                <div className="flex items-center justify-center cursor-pointer select-none" onClick={() => handleSort("deskripsi")}>
+                  Deskripsi {sortConfig.key === "deskripsi" ? (sortConfig.direction === "asc" ? "🔼" : "🔽") : "↕️"}
+                </div>
                 <span style={{ position: 'absolute', right: 4, top: 4 }}>
                   <SimpleDropdownFilterButton
                     filterType="text"
@@ -473,8 +523,10 @@ export default function AJE() {
               <th className="border px-2 py-1">Kredit</th>
               <th className="border px-2 py-1" style={{ minWidth: 120 }}>Project No</th>
               <th className="border px-2 py-1" style={{ minWidth: 180 }}>Project Name</th>
-             <th className="border px-2 py-1" style={{ position: 'relative' }}>
-                Aksi
+              <th className="border px-2 py-1" style={{ position: 'relative' }}>
+                <div className="flex items-center justify-center cursor-pointer select-none" onClick={() => handleSort("posted")}>
+                  Aksi {sortConfig.key === "posted" ? (sortConfig.direction === "asc" ? "🔼" : "🔽") : "↕️"}
+                </div>
                 <span style={{ position: 'absolute', right: 4, top: 4 }}>
                   <SimpleDropdownFilterButton
                     filterType="status"
@@ -491,322 +543,401 @@ export default function AJE() {
             </tr>
           </thead>
           <tbody>
-            {filteredRows.map((row, idx) => (
-              <tr
-                key={row.id}
-                style={{
-                  background: row.posted ? theme.tableHeaderColor : theme.tableBodyColor,
-                  color: theme.tableFontColor,
-                  fontFamily: theme.tableFontFamily,
-                }}
-              >
-                <td className="border px-2 py-1" style={{ minWidth: 150 }}>
-                  {row.posted ? (
-                    formatTanggal(row.tanggal)
-                  ) : (
-                    <DatePicker
-                      selected={
-                        row.tanggal
-                          ? parse(row.tanggal, "yyyy-MM-dd", new Date())
-                          : null
-                      }
-                      onChange={date => {
-                        const iso = date ? format(date, "yyyy-MM-dd") : "";
-                        handleChange(idx, { target: { name: "tanggal", value: iso } });
-                      }}
-                      dateFormat="dd/MM/yyyy"
-                      customInput={
-                        <input
-                          className="border rounded px-2 py-1"
-                          readOnly={row.posted}
-                          disabled={row.posted}
-                          placeholder="dd/mm/yyyy"
-                          style={{
-                            background: theme.fieldColor,
-                            color: theme.fontColor,
-                            fontFamily: theme.fontFamily,
-                          }}
-                        />
-                      }
+            {currentRowsFiltered.map((row) => {
+              const realIdx = rows.findIndex(r => r.tempId === row.tempId);
+              return (
+                <tr
+                  key={row.tempId}
+                  className="transition-colors hover:bg-blue-50/50"
+                  style={{
+                    background: row.posted ? theme.tableHeaderColor : theme.tableBodyColor,
+                    color: theme.tableFontColor,
+                    fontFamily: theme.tableFontFamily,
+                  }}
+                >
+                  <td className="border px-2 py-1" style={{ minWidth: 150 }}>
+                    {row.posted ? (
+                      formatTanggal(row.tanggal)
+                    ) : (
+                      <DatePicker
+                        selected={
+                          row.tanggal
+                            ? parse(row.tanggal, "yyyy-MM-dd", new Date())
+                            : null
+                        }
+                        onChange={date => {
+                          const iso = date ? format(date, "yyyy-MM-dd") : "";
+                          handleChange(realIdx, { target: { name: "tanggal", value: iso } });
+                        }}
+                        dateFormat="dd/MM/yyyy"
+                        customInput={
+                          <input
+                            className="border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
+                            readOnly={row.posted}
+                            disabled={row.posted}
+                            placeholder="dd/mm/yyyy"
+                            style={{
+                              background: theme.fieldColor,
+                              color: theme.fontColor,
+                              fontFamily: theme.fontFamily,
+                            }}
+                          />
+                        }
+                        disabled={row.posted}
+                      />
+                    )}
+                  </td>
+                  <td className="border px-2 py-1">
+                    <input
+                      type="text"
+                      name="noBukti"
+                      value={row.noBukti}
+                      onChange={e => handleChange(realIdx, e)}
+                      className="border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-blue-400 text-center font-semibold text-blue-700 bg-blue-50"
+                      readOnly={row.posted}
                       disabled={row.posted}
+                      style={{
+                        background: theme.fieldColor,
+                        color: theme.fontColor,
+                        fontFamily: theme.fontFamily,
+                      }}
                     />
-                  )}
-                </td>
-                <td className="border px-2 py-1">
-                  <input
-                    type="text"
-                    name="noBukti"
-                    value={row.noBukti}
-                    onChange={e => handleChange(idx, e)}
-                    className="border rounded px-2 py-1"
-                    readOnly={row.posted}
-                    disabled={row.posted}
-                    style={{
-                      background: theme.fieldColor,
-                      color: theme.fontColor,
-                      fontFamily: theme.fontFamily,
-                    }}
-                  />
-                </td>
-                <td className="border px-2 py-1">
-                  <select
-                    name="namaAkun"
-                    value={row.namaAkun}
-                    onChange={e => handleChange(idx, e)}
-                    className="border rounded px-2 py-1 w-full"
-                    disabled={row.posted}
-                    style={{
-                      background: theme.fieldColor,
-                      color: theme.fontColor,
-                      fontFamily: theme.fontFamily,
-                    }}
-                  >
-                    <option value="">Pilih Akun</option>
-                    {coaList.map(coa => (
-                      <option key={coa.id} value={coa.nama} data-kode={coa.kode}>
-                        ({coa.kode}) {coa.nama}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td className="border px-2 py-1">
-                  <input
-                    type="text"
-                    name="deskripsi"
-                    value={row.deskripsi}
-                    onChange={e => handleChange(idx, e)}
-                    className="border rounded px-2 py-1"
-                    readOnly={row.posted}
-                    disabled={row.posted}
-                    style={{
-                      background: theme.fieldColor,
-                      color: theme.fontColor,
-                      fontFamily: theme.fontFamily,
-                    }}
-                  />
-                </td>
-                <td className="border px-2 py-1">
-                  <input
-                    type="text"
-                    name="debit"
-                    value={row._editingDebit === undefined ? (row.debit === "" ? "" : Number(row.debit).toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : row._editingDebit}
-                    onChange={e => {
-                      let raw = e.target.value.replace(/[^0-9.,]/g, "");
-                      raw = raw.replace(/,/g, ".");
-                      setRows(rows.map((r, i) =>
-                        i === idx ? { ...r, _editingDebit: e.target.value, debit: raw, saved: false } : r
-                      ));
-                    }}
-                    onBlur={e => {
-                      setRows(rows.map((r, i) => {
-                        if (i === idx) {
-                          const val = r.debit === "" ? "" : Number(r.debit).toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                          const { _editingDebit, ...rest } = r;
-                          return { ...rest };
-                        }
-                        return r;
-                      }));
-                    }}
-                    onFocus={e => {
-                      setRows(rows.map((r, i) => i === idx ? { ...r, _editingDebit: r.debit } : r));
-                    }}
-                    className="border rounded px-2 py-1 text-right"
-                    readOnly={row.posted}
-                    disabled={row.posted || (row.kredit && row.kredit !== "" && parseFloat(row.kredit) !== 0)}
-                    style={{
-                      background: theme.fieldColor,
-                      color: theme.fontColor,
-                      fontFamily: theme.fontFamily,
-                    }}
-                  />
-                </td>
-                <td className="border px-2 py-1">
-                  <input
-                    type="text"
-                    name="kredit"
-                    value={row._editingKredit === undefined ? (row.kredit === "" ? "" : Number(row.kredit).toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : row._editingKredit}
-                    onChange={e => {
-                      let raw = e.target.value.replace(/[^0-9.,]/g, "");
-                      raw = raw.replace(/,/g, ".");
-                      setRows(rows.map((r, i) => i === idx ? { ...r, _editingKredit: e.target.value, kredit: raw, saved: false } : r));
-                    }}
-                    onBlur={e => {
-                      setRows(rows.map((r, i) => {
-                        if (i === idx) {
-                          const val = r.kredit === "" ? "" : Number(r.kredit).toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                          const { _editingKredit, ...rest } = r;
-                          return { ...rest };
-                        }
-                        return r;
-                      }));
-                    }}
-                    onFocus={e => {
-                      setRows(rows.map((r, i) => i === idx ? { ...r, _editingKredit: r.kredit } : r));
-                    }}
-                    className="border rounded px-2 py-1 text-right"
-                    readOnly={row.posted}
-                    disabled={row.posted || (row.debit && row.debit !== "" && parseFloat(row.debit) !== 0)}
-                    style={{
-                      background: theme.fieldColor,
-                      color: theme.fontColor,
-                      fontFamily: theme.fontFamily,
-                    }}
-                  />
-                </td>
-                <td className="border px-2 py-1">
-                  <select
-                    name="projectNo"
-                    value={row.projectNo || ""}
-                    onChange={e => {
-                      const value = e.target.value;
-                      const selected = projectList.find(p => p.kode_project === value);
-                      handleChange(idx, { target: { name: "projectNo", value } });
-                      setRows(rows.map((r, i) =>
-                        i === idx
-                          ? { ...r, projectNo: value, projectName: selected ? selected.nama_project : "" }
-                          : r
-                      ));
-                    }}
-                    className="border rounded px-2 py-1 w-full"
-                    disabled={row.posted}
-                    style={{
-                      background: theme.fieldColor,
-                      color: theme.fontColor,
-                      fontFamily: theme.fontFamily,
-                    }}
-                  >
-                    <option value="">Pilih Project</option>
-                    {renderProjectOptions()}
-                  </select>
-                </td>
-                <td className="border px-2 py-1">
-                  <input
-                    type="text"
-                    name="projectName"
-                    value={row.projectName || ""}
-                    readOnly
-                    className="border rounded px-2 py-1 w-full"
-                    placeholder="Nama project otomatis"
-                    style={{
-                      background: theme.fieldColor,
-                      color: theme.fontColor,
-                      fontFamily: theme.fontFamily,
-                    }}
-                  />
-                </td>
-                <td className="border px-2 py-1 text-center">
-                  {!row.saved ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => handleSave(idx)}
-                        className="font-bold"
-                        title="Simpan"
-                        style={{
-                          color: theme.buttonSimpan,
-                          fontFamily: theme.fontFamily,
-                          background: "transparent",
-                          border: "none",
-                        }}
-                      >💾</button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(idx)}
-                        className="ml-2 font-bold"
-                        title="Hapus"
-                        style={{
-                          color: theme.buttonHapus,
-                          fontFamily: theme.fontFamily,
-                          background: "transparent",
-                          border: "none",
-                        }}
-                      >🗑️</button>
-                      <button
-                        type="button"
-                        onClick={() => handleClone(idx)}
-                        className="ml-2 font-bold"
-                        title="Clone"
-                        style={{
-                          color: theme.buttonEdit,
-                          fontFamily: theme.fontFamily,
-                          background: "transparent",
-                          border: "none",
-                        }}
-                      >📋</button>
-                    </>
-                  ) : (
-                    <>
-                      {!row.posted ? (
-                        <button
-                          type="button"
-                          onClick={() => handlePosting(idx)}
-                          className="font-bold"
-                          title="Posting"
-                          style={{
-                            color: theme.buttonEdit,
-                            fontFamily: theme.fontFamily,
-                            background: "transparent",
-                            border: "none",
-                          }}
-                        >📤</button>
+                  </td>
+                  <td className="border px-2 py-1">
+                    <select
+                      name="namaAkun"
+                      value={row.namaAkun}
+                      onChange={e => handleChange(realIdx, e)}
+                      className="border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      disabled={row.posted}
+                      style={{
+                        background: theme.fieldColor,
+                        color: theme.fontColor,
+                        fontFamily: theme.fontFamily,
+                      }}
+                    >
+                      <option value="">Pilih Akun</option>
+                      {coaList.map(coa => (
+                        <option key={coa.id} value={coa.nama} data-kode={coa.kode}>
+                          ({coa.kode}) {coa.nama}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="border px-2 py-1">
+                    <input
+                      type="text"
+                      name="deskripsi"
+                      value={row.deskripsi}
+                      onChange={e => handleChange(realIdx, e)}
+                      className="border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      readOnly={row.posted}
+                      disabled={row.posted}
+                      style={{
+                        background: theme.fieldColor,
+                        color: theme.fontColor,
+                        fontFamily: theme.fontFamily,
+                      }}
+                    />
+                  </td>
+                  <td className="border px-2 py-1">
+                    <input
+                      type="text"
+                      name="debit"
+                      value={row._editingDebit === undefined ? (row.debit === "" ? "" : Number(row.debit).toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : row._editingDebit}
+                      onChange={e => {
+                        let raw = e.target.value.replace(/[^0-9.,]/g, "");
+                        raw = raw.replace(/,/g, ".");
+                        setRows(rows.map((r) =>
+                          r.tempId === row.tempId ? { ...r, _editingDebit: e.target.value, debit: raw, saved: false } : r
+                        ));
+                      }}
+                      onBlur={() => {
+                        setRows(rows.map((r) => {
+                          if (r.tempId === row.tempId) {
+                            const { _editingDebit, ...rest } = r;
+                            return { ...rest };
+                          }
+                          return r;
+                        }));
+                      }}
+                      onFocus={() => {
+                        setRows(rows.map((r) => r.tempId === row.tempId ? { ...r, _editingDebit: r.debit } : r));
+                      }}
+                      className="border rounded px-2 py-1 text-right w-full focus:outline-none focus:ring-1 focus:ring-green-400"
+                      readOnly={row.posted}
+                      disabled={row.posted || (row.kredit && row.kredit !== "" && parseFloat(row.kredit) !== 0)}
+                      style={{
+                        background: theme.fieldColor,
+                        color: theme.fontColor,
+                        fontFamily: theme.fontFamily,
+                      }}
+                    />
+                  </td>
+                  <td className="border px-2 py-1">
+                    <input
+                      type="text"
+                      name="kredit"
+                      value={row._editingKredit === undefined ? (row.kredit === "" ? "" : Number(row.kredit).toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : row._editingKredit}
+                      onChange={e => {
+                        let raw = e.target.value.replace(/[^0-9.,]/g, "");
+                        raw = raw.replace(/,/g, ".");
+                        setRows(rows.map((r) => r.tempId === row.tempId ? { ...r, _editingKredit: e.target.value, kredit: raw, saved: false } : r));
+                      }}
+                      onBlur={() => {
+                        setRows(rows.map((r) => {
+                          if (r.tempId === row.tempId) {
+                            const { _editingKredit, ...rest } = r;
+                            return { ...rest };
+                          }
+                          return r;
+                        }));
+                      }}
+                      onFocus={() => {
+                        setRows(rows.map((r) => r.tempId === row.tempId ? { ...r, _editingKredit: r.kredit } : r));
+                      }}
+                      className="border rounded px-2 py-1 text-right w-full focus:outline-none focus:ring-1 focus:ring-red-400"
+                      readOnly={row.posted}
+                      disabled={row.posted || (row.debit && row.debit !== "" && parseFloat(row.debit) !== 0)}
+                      style={{
+                        background: theme.fieldColor,
+                        color: theme.fontColor,
+                        fontFamily: theme.fontFamily,
+                      }}
+                    />
+                  </td>
+                  <td className="border px-2 py-1">
+                    <select
+                      name="projectNo"
+                      value={row.projectNo || ""}
+                      onChange={e => {
+                        const value = e.target.value;
+                        const selected = projectList.find(p => p.kode_project === value);
+                        handleChange(realIdx, { target: { name: "projectNo", value } });
+                        setRows(rows.map((r) =>
+                          r.tempId === row.tempId
+                            ? { ...r, projectNo: value, projectName: selected ? selected.nama_project : "" }
+                            : r
+                        ));
+                      }}
+                      className="border rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      disabled={row.posted}
+                      style={{
+                        background: theme.fieldColor,
+                        color: theme.fontColor,
+                        fontFamily: theme.fontFamily,
+                      }}
+                    >
+                      <option value="">Pilih Project</option>
+                      {renderProjectOptions()}
+                    </select>
+                  </td>
+                  <td className="border px-2 py-1 text-xs text-gray-500 italic">
+                    {row.projectName || "Nama project otomatis"}
+                  </td>
+                  <td className="border px-2 py-1 text-center whitespace-nowrap">
+                    <div className="flex items-center justify-center gap-1.5">
+                      {!row.saved ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleSave(realIdx)}
+                            className="p-1.5 rounded-full hover:bg-green-100 transition-colors"
+                            title="Simpan"
+                            style={{
+                              color: theme.buttonSimpan,
+                            }}
+                          >💾</button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(realIdx)}
+                            className="p-1.5 rounded-full hover:bg-red-100 transition-colors"
+                            title="Hapus"
+                            style={{
+                              color: theme.buttonHapus,
+                            }}
+                          >🗑️</button>
+                          <button
+                            type="button"
+                            onClick={() => handleClone(realIdx)}
+                            className="p-1.5 rounded-full hover:bg-blue-100 transition-colors"
+                            title="Clone"
+                            style={{
+                              color: theme.buttonEdit,
+                            }}
+                          >📋</button>
+                        </>
                       ) : (
+                        <>
+                          {!row.posted ? (
+                            <button
+                              type="button"
+                              onClick={() => handlePosting(realIdx)}
+                              className="p-1.5 rounded-full hover:bg-blue-100 transition-colors"
+                              title="Posting"
+                              style={{
+                                color: theme.buttonEdit,
+                              }}
+                            >📤</button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleUnposting(realIdx)}
+                              className="p-1.5 rounded-full hover:bg-orange-100 transition-colors"
+                              title="Unposting"
+                              style={{
+                                color: theme.buttonRefresh,
+                              }}
+                            >↩️</button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(realIdx)}
+                            className="p-1.5 rounded-full hover:bg-red-100 transition-colors"
+                            title="Hapus"
+                            style={{
+                              color: theme.buttonHapus,
+                            }}
+                          >🗑️</button>
+                          <button
+                            type="button"
+                            onClick={() => handleClone(realIdx)}
+                            className="p-1.5 rounded-full hover:bg-blue-100 transition-colors"
+                            title="Clone"
+                            style={{
+                              color: theme.buttonEdit,
+                            }}
+                          >📋</button>
+                        </>
+                      )}
+                      {row.posted && (
                         <button
                           type="button"
-                          onClick={() => handleUnposting(idx)}
-                          className="font-bold"
-                          title="Unposting"
-                          style={{
-                            color: theme.buttonRefresh,
-                            fontFamily: theme.fontFamily,
-                            background: "transparent",
-                            border: "none",
+                          onClick={() => {
+                            setJournalNomorTransaksi(row.noBukti);
+                            setShowJournalModal(true);
                           }}
-                        >↩️</button>
+                          className="p-1.5 rounded-full hover:bg-indigo-100 transition-colors"
+                          title="Lihat Jurnal"
+                          style={{
+                            color: theme.buttonEdit || "#4f46e5",
+                          }}
+                        >
+                          <ViewIcon sx={{ fontSize: 18 }} />
+                        </button>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(idx)}
-                        className="ml-2 font-bold"
-                        title="Hapus"
-                        style={{
-                          color: theme.buttonHapus,
-                          fontFamily: theme.fontFamily,
-                          background: "transparent",
-                          border: "none",
-                        }}
-                      >🗑️</button>
-                      <button
-                        type="button"
-                        onClick={() => handleClone(idx)}
-                        className="ml-2 font-bold"
-                        title="Clone"
-                        style={{
-                          color: theme.buttonEdit,
-                          fontFamily: theme.fontFamily,
-                          background: "transparent",
-                          border: "none",
-                        }}
-                      >📋</button>
-                    </>
-                  )}
-                </td>
-              </tr>
-            ))}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
-      <button
-        type="button"
-        onClick={() => addRow()}
-        className="mt-3 px-4 py-2 rounded"
-        style={{
-          background: theme.buttonSimpan,
-          color: "#fff",
-          fontFamily: theme.fontFamily,
-        }}
-      >
-        + Tambah Baris
-      </button>
+      <div className="flex flex-wrap items-center justify-between mt-4 bg-gray-50 p-3 rounded-lg border border-gray-200 shadow-sm">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => addRow()}
+            className="px-6 py-2.5 rounded-lg font-bold transition-all hover:scale-105 active:scale-95 shadow-md flex items-center gap-2"
+            style={{
+              background: theme.buttonSimpan,
+              color: "#fff",
+              fontFamily: theme.fontFamily,
+            }}
+          >
+            <span className="text-xl">+</span> Tambah Baris
+          </button>
+          <div className="h-8 w-px bg-gray-300 mx-2"></div>
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-600">
+            <span>Tampilkan</span>
+            <select
+              value={rowsPerPage}
+              onChange={(e) => {
+                setRowsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="border rounded-md px-2 py-1 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              {[5, 10, 25, 50, 100].map(n => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+            <span>baris</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <span className="mr-4 text-sm font-medium text-gray-600">
+            Halaman <span className="text-blue-600 font-bold">{currentPage}</span> dari <span className="font-bold">{totalPages || 1}</span>
+            <span className="ml-2 text-gray-400">({sortedRows.length} total data)</span>
+          </span>
+          <nav className="flex items-center gap-1">
+            <button
+              onClick={() => paginate(1)}
+              disabled={currentPage === 1}
+              className={`p-2 rounded-md border transition-colors ${currentPage === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:bg-gray-100 text-blue-600'}`}
+              title="Awal"
+            >
+              ⏮️
+            </button>
+            <button
+              onClick={() => paginate(currentPage - 1)}
+              disabled={currentPage === 1}
+              className={`p-2 rounded-md border transition-colors ${currentPage === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:bg-gray-100 text-blue-600'}`}
+              title="Sebelumnya"
+            >
+              ◀️
+            </button>
+
+            <div className="flex items-center gap-1 px-2">
+              {/* Simple page numbers around current page */}
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) pageNum = i + 1;
+                else if (currentPage <= 3) pageNum = i + 1;
+                else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                else pageNum = currentPage - 2 + i;
+
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => paginate(pageNum)}
+                    className={`w-8 h-8 rounded-md border text-sm font-bold transition-all ${currentPage === pageNum ? 'bg-blue-600 text-white border-blue-600 shadow-sm scale-110' : 'bg-white hover:bg-gray-100 text-gray-600'}`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => paginate(currentPage + 1)}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className={`p-2 rounded-md border transition-colors ${currentPage === totalPages || totalPages === 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:bg-gray-100 text-blue-600'}`}
+              title="Berikutnya"
+            >
+              ▶️
+            </button>
+            <button
+              onClick={() => paginate(totalPages)}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className={`p-2 rounded-md border transition-colors ${currentPage === totalPages || totalPages === 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:bg-gray-100 text-blue-600'}`}
+              title="Akhir"
+            >
+              ⏭️
+            </button>
+          </nav>
+
+        </div>
+      </div>
+
+      <JournalPreviewModal
+        open={showJournalModal}
+        onClose={() => setShowJournalModal(false)}
+        nomorTransaksi={journalNomorTransaksi}
+        title="Jurnal Penyesuaian (AJE)"
+      />
     </div>
   );
 }

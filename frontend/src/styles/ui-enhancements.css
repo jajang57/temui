@@ -1,0 +1,564 @@
+/**
+ * UI Enhancements - Professional Light Mode ERP Theme
+ * 
+ * Inspired by: Xero, QuickBooks, SAP Business One
+ * Focus: Clean, light, data-focused, professional
+ */
+
+/* ===================================================
+   ROOT VARIABLES - Professional Light Mode
+   =================================================== */
+:root {
+    /* Professional font stack */
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'SF Mono', 'Consolas', 'Liberation Mono', monospace;
+
+    /* Light background palette */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8fafc;
+    --bg-tertiary: #f1f5f9;
+    --bg-sidebar: #1e293b;
+    --bg-sidebar-hover: #334155;
+    --bg-sidebar-active: #3b82f6;
+
+    /* Text colors */
+    --text-primary: #1e293b;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --text-on-dark: #f8fafc;
+
+    /* Accent colors - subtle blue */
+    --accent-primary: #3b82f6;
+    --accent-primary-hover: #2563eb;
+    --accent-success: #10b981;
+    --accent-danger: #ef4444;
+    --accent-warning: #f59e0b;
+
+    /* Borders */
+    --border-light: #e2e8f0;
+    --border-medium: #cbd5e1;
+
+    /* Shadows - very subtle */
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.03);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+
+    /* Spacing */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 12px;
+    --spacing-lg: 16px;
+    --spacing-xl: 24px;
+
+    /* Transitions */
+    --transition-fast: 0.1s ease;
+    --transition-base: 0.15s ease;
+}
+
+/* ===================================================
+   BASE TYPOGRAPHY
+   =================================================== */
+html {
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+    background-color: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+}
+
+/* ===================================================
+   MAIN LAYOUT - Light Background
+   =================================================== */
+main,
+[class*="main"],
+.MuiBox-root {
+    background-color: var(--bg-secondary) !important;
+}
+
+/* ===================================================
+   SIDEBAR - Elegant Professional Sidebar (Light Theme)
+   Harmonized with white body & light headers
+   =================================================== */
+.professional-sidebar {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    border-right: 1px solid #e2e8f0 !important;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.02) !important;
+}
+
+.professional-sidebar,
+.professional-sidebar * {
+    color: #475569 !important;
+    /* Soft dark slate text */
+}
+
+/* Sidebar Links & Buttons - Base State */
+.professional-sidebar a,
+.professional-sidebar button {
+    background-color: transparent !important;
+    color: #475569 !important;
+    border-radius: 6px !important;
+    margin: 2px 8px !important;
+    padding: 10px 12px !important;
+    font-weight: 500 !important;
+    transition: all 0.2s ease !important;
+    border: 1px solid transparent !important;
+}
+
+/* Hover State - Very Subtle Gray */
+.professional-sidebar a:hover,
+.professional-sidebar button:hover {
+    background-color: #f8fafc !important;
+    color: #1e293b !important;
+}
+
+/* Active State - Soft Blue Background + Accent */
+.professional-sidebar a.active,
+.professional-sidebar a[class*="bg-indigo"],
+.professional-sidebar button[class*="bg-indigo"] {
+    background-color: #eff6ff !important;
+    /* Extremely light blue bg */
+    color: #2563eb !important;
+    /* Royal blue text */
+    border-left: 3px solid #2563eb !important;
+    border-radius: 0 6px 6px 0 !important;
+    font-weight: 600 !important;
+}
+
+/* Opened Dropdown Parent */
+.professional-sidebar button[class*="bg-indigo"] {
+    background-color: #f1f5f9 !important;
+    color: #1e293b !important;
+    border-left: none !important;
+    border-radius: 6px !important;
+}
+
+/* Submenu Items */
+.professional-sidebar .ml-6 a,
+.professional-sidebar .ml-6 button {
+    font-size: 12px !important;
+    padding-left: 12px !important;
+    border-left: 1px solid #e2e8f0 !important;
+    margin-left: 20px !important;
+}
+
+.professional-sidebar .ml-6 a.active,
+.professional-sidebar .ml-6 a[class*="bg-indigo"] {
+    border-left: 2px solid #2563eb !important;
+    color: #2563eb !important;
+    background: transparent !important;
+}
+
+/* Sidebar Icons */
+.professional-sidebar svg {
+    color: #94a3b8 !important;
+    opacity: 1;
+}
+
+.professional-sidebar a.active svg,
+.professional-sidebar a:hover svg {
+    color: #2563eb !important;
+}
+
+/* User Profile Section */
+.professional-sidebar .border-t {
+    border-top: 1px solid #e2e8f0 !important;
+    margin-top: auto !important;
+    padding: 16px !important;
+    background: #f8fafc !important;
+}
+
+/* Avatar Circle */
+.professional-sidebar .rounded-full.bg-indigo-500 {
+    background-color: #e2e8f0 !important;
+    color: #475569 !important;
+    border: 1px solid #cbd5e1 !important;
+}
+
+/* Legacy overrides */
+aside.w-64,
+aside[class*="w-64"] {
+    background: #ffffff !important;
+    border-right: 1px solid #e2e8f0 !important;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.02) !important;
+}
+
+/* ===================================================
+   CARDS - Clean White Cards (Compact)
+   =================================================== */
+.elegant-card,
+[class*="Card"],
+.MuiCard-root,
+.MuiPaper-root {
+    background-color: var(--bg-primary) !important;
+    border: 1px solid var(--border-light) !important;
+    border-radius: 10px !important;
+    box-shadow: var(--shadow-sm) !important;
+}
+
+.elegant-card-header,
+[class*="CardHeader"] {
+    padding: 12px 16px !important;
+    /* Compact header */
+    border-bottom: 1px solid var(--border-light) !important;
+    background: transparent !important;
+}
+
+.elegant-card-content,
+[class*="CardContent"],
+.MuiCardContent-root {
+    padding: 16px !important;
+    /* Compact content */
+    background-color: var(--bg-primary) !important;
+}
+
+/* ===================================================
+   BUTTONS - Professional Styling (Compact)
+   =================================================== */
+button,
+.MuiButton-root,
+[class*="btn"] {
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    padding: 6px 14px !important;
+    /* Reduced vertical padding */
+    border-radius: 6px !important;
+    letter-spacing: 0.01em !important;
+    text-transform: none !important;
+    transition: all var(--transition-base) !important;
+    min-height: 32px !important;
+    box-shadow: none !important;
+}
+
+/* Primary button - Blue */
+button[style*="buttonSimpan"],
+button.primary,
+.MuiButton-containedPrimary {
+    background-color: var(--accent-primary) !important;
+    color: white !important;
+    border: none !important;
+}
+
+button[style*="buttonSimpan"]:hover,
+button.primary:hover,
+.MuiButton-containedPrimary:hover {
+    background-color: var(--accent-primary-hover) !important;
+    box-shadow: var(--shadow-sm) !important;
+}
+
+/* Danger button - Red */
+button[style*="buttonHapus"],
+button.danger,
+.MuiButton-containedError {
+    background-color: var(--accent-danger) !important;
+    color: white !important;
+}
+
+/* Success button - Green (less saturated) */
+button[style*="buttonSimpan"] {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+}
+
+/* Secondary/Ghost button */
+button.secondary,
+button.ghost,
+.MuiButton-outlined {
+    background-color: transparent !important;
+    border: 1px solid var(--border-medium) !important;
+    color: var(--text-primary) !important;
+}
+
+button.secondary:hover,
+button.ghost:hover,
+.MuiButton-outlined:hover {
+    background-color: var(--bg-tertiary) !important;
+}
+
+/* ===================================================
+   TABLES - Professional Data Display (Compact)
+   =================================================== */
+.MuiTableContainer-root,
+[class*="TableContainer"],
+table {
+    background-color: var(--bg-primary) !important;
+    border-radius: 10px !important;
+    border: 1px solid var(--border-light) !important;
+    overflow: hidden !important;
+    box-shadow: none !important;
+}
+
+/* Table header */
+thead,
+.MuiTableHead-root,
+th,
+.MuiTableCell-head {
+    background-color: var(--bg-tertiary) !important;
+    color: var(--text-secondary) !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    padding: 8px 12px !important;
+    /* Compact header */
+    border-bottom: 1px solid var(--border-light) !important;
+}
+
+/* Table rows */
+tbody tr,
+.MuiTableRow-root {
+    background-color: var(--bg-primary) !important;
+    transition: background-color var(--transition-fast) !important;
+}
+
+tbody tr:hover,
+.MuiTableRow-root:hover {
+    background-color: #f8fafc !important;
+}
+
+/* Alternating rows */
+tbody tr:nth-child(even) {
+    background-color: #fafbfc !important;
+}
+
+/* Table cells */
+td,
+.MuiTableCell-body {
+    padding: 8px 12px !important;
+    /* Compact cells */
+    font-size: 13px !important;
+    color: var(--text-primary) !important;
+    border-bottom: 1px solid var(--border-light) !important;
+}
+
+/* Number cells */
+td[align="right"],
+.MuiTableCell-alignRight {
+    font-family: var(--font-mono) !important;
+    font-variant-numeric: tabular-nums !important;
+    color: var(--text-primary) !important;
+}
+
+/* ===================================================
+   INPUTS - Clean Form Elements (Compact)
+   =================================================== */
+input,
+textarea,
+select,
+.MuiInputBase-input,
+.MuiOutlinedInput-root {
+    background-color: var(--bg-primary) !important;
+    border: 1px solid var(--border-light) !important;
+    border-radius: 6px !important;
+    padding: 6px 10px !important;
+    /* Compact inputs */
+    font-size: 13px !important;
+    color: var(--text-primary) !important;
+    transition: all var(--transition-base) !important;
+    min-height: 32px !important;
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+.MuiOutlinedInput-root.Mui-focused {
+    border-color: var(--accent-primary) !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+    outline: none !important;
+}
+
+/* Labels */
+label,
+.MuiInputLabel-root {
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    color: var(--text-secondary) !important;
+    margin-bottom: 4px !important;
+}
+
+/* ===================================================
+   DROPDOWNS - React Select (Compact)
+   =================================================== */
+[class*="react-select__control"] {
+    background-color: var(--bg-primary) !important;
+    border: 1px solid var(--border-light) !important;
+    border-radius: 6px !important;
+    min-height: 32px !important;
+    /* Compact height */
+    box-shadow: none !important;
+}
+
+[class*="react-select__control"]:hover {
+    border-color: var(--border-medium) !important;
+}
+
+[class*="react-select__control--is-focused"] {
+    border-color: var(--accent-primary) !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+}
+
+[class*="react-select__menu"] {
+    background-color: var(--bg-primary) !important;
+    border: 1px solid var(--border-light) !important;
+    border-radius: 8px !important;
+    box-shadow: var(--shadow-md) !important;
+}
+
+[class*="react-select__option"] {
+    padding: 6px 10px !important;
+    font-size: 13px !important;
+}
+
+[class*="react-select__option--is-focused"] {
+    background-color: var(--bg-tertiary) !important;
+}
+
+[class*="react-select__option--is-selected"] {
+    background-color: var(--accent-primary) !important;
+}
+
+/* ===================================================
+   HEADINGS (Scaled Down)
+   =================================================== */
+h1 {
+    font-size: 20px !important;
+    /* Scaled down */
+    font-weight: 600 !important;
+    color: var(--text-primary) !important;
+    letter-spacing: -0.02em !important;
+}
+
+h2 {
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    color: var(--text-primary) !important;
+}
+
+h3 {
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    color: var(--text-primary) !important;
+}
+
+/* ===================================================
+   BADGES & CHIPS
+   =================================================== */
+[class*="badge"],
+.MuiChip-root {
+    font-size: 11px !important;
+    font-weight: 500 !important;
+    padding: 2px 8px !important;
+    border-radius: 12px !important;
+}
+
+/* ===================================================
+   SCROLLBARS - Professional Mac-Style (Elegant)
+   =================================================== */
+/* Konsep: Scrollbar tidak boleh mengganggu konten */
+
+/* Width */
+::-webkit-scrollbar {
+    width: 8px !important;
+    height: 8px !important;
+}
+
+/* Track (Background) - Transparan/Subtle */
+::-webkit-scrollbar-track {
+    background: transparent !important;
+    margin: 4px !important;
+}
+
+/* Handle (Slider) - Soft Grey */
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1 !important;
+    border-radius: 10px !important;
+    border: 2px solid transparent !important;
+    /* Membuat efek padding */
+    background-clip: content-box !important;
+}
+
+/* Handle on Hover - Darker Grey */
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8 !important;
+    border: 2px solid transparent !important;
+    background-clip: content-box !important;
+}
+
+/* Corner */
+::-webkit-scrollbar-corner {
+    background: transparent !important;
+}
+
+/* Specific for Sidebar Scrollbar - Even Thinner */
+.professional-sidebar ::-webkit-scrollbar {
+    width: 4px !important;
+}
+
+/* ===================================================
+   UTILITY CLASSES - Layout Concepts
+   =================================================== */
+.text-mono {
+    font-family: var(--font-mono) !important;
+}
+
+.text-tabular {
+    font-variant-numeric: tabular-nums !important;
+}
+
+.shadow-elegant {
+    box-shadow: var(--shadow-sm) !important;
+}
+
+.rounded-elegant {
+    border-radius: 8px !important;
+}
+
+/* ===================================================
+   PRINT STYLES
+   =================================================== */
+@media print {
+    body {
+        font-size: 12px;
+        background: white !important;
+    }
+
+    .no-print,
+    .professional-sidebar,
+    aside {
+        display: none !important;
+    }
+
+    table {
+        font-size: 11px !important;
+        width: 100% !important;
+    }
+
+    th,
+    td {
+        padding: 6px 8px !important;
+        border: 1px solid #ddd !important;
+    }
+}
+
+/* FORCE LOGOUT RED - Fix Specificity Issue */
+.professional-sidebar button.logout-btn {
+    background-color: #dc2626 !important;
+    color: #ffffff !important;
+    border: 1px solid #b91c1c !important;
+    box-shadow: 0 4px 6px -1px rgba(220, 38, 38, 0.3) !important;
+}
+
+.professional-sidebar button.logout-btn:hover {
+    background-color: #b91c1c !important;
+    transform: translateY(-1px) !important;
+}
+
+.professional-sidebar button.logout-btn:active {
+    transform: translateY(0) !important;
+    box-shadow: none !important;
+}

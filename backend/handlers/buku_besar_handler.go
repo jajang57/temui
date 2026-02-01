@@ -13,6 +13,8 @@ type BukuBesarRequest struct {
 	COA          string `form:"coa"`
 	TanggalAwal  string `form:"tanggal_awal"`
 	TanggalAkhir string `form:"tanggal_akhir"`
+	ContactID    uint   `form:"contact_id"`
+	ContactType  string `form:"contact_type"`
 }
 
 type BukuBesarResponse struct {
@@ -44,6 +46,12 @@ func GetBukuBesar(db *gorm.DB) gin.HandlerFunc {
 		if req.COA != "" {
 			query = query.Where("akun_transaksi = ?", req.COA)
 		}
+		if req.ContactID != 0 {
+			query = query.Where("contact_id = ?", req.ContactID)
+		}
+		if req.ContactType != "" {
+			query = query.Where("contact_type = ?", req.ContactType)
+		}
 		query = query.Where("tanggal >= ? AND tanggal <= ?", req.TanggalAwal, req.TanggalAkhir).Order("tanggal, nomor_transaksi, id").Find(&bukuBesar)
 
 		// Debug: log hasil query
@@ -57,6 +65,12 @@ func GetBukuBesar(db *gorm.DB) gin.HandlerFunc {
 		querySaldo := db.Model(&models.GL{})
 		if req.COA != "" {
 			querySaldo = querySaldo.Where("akun_transaksi = ?", req.COA)
+		}
+		if req.ContactID != 0 {
+			querySaldo = querySaldo.Where("contact_id = ?", req.ContactID)
+		}
+		if req.ContactType != "" {
+			querySaldo = querySaldo.Where("contact_type = ?", req.ContactType)
 		}
 		querySaldo = querySaldo.Where("tanggal < ?", req.TanggalAwal)
 		querySaldo.Select("SUM(debit - kredit)").Row().Scan(&saldoAwal)

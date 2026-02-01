@@ -1,229 +1,309 @@
-import { useMemo } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend } from "recharts";
+import { useState, useEffect, useMemo } from "react";
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend } from "recharts";
 import { motion } from "framer-motion";
-import MasterCard from "../master_fn/MasterCard";
-
-const chartData = [
-  { month: "Jan", income: 17000, expense: 15000 },
-  { month: "Feb", income: 18000, expense: 16000 },
-  { month: "Mar", income: 17500, expense: 17000 },
-  { month: "Apr", income: 18500, expense: 16500 },
-  { month: "May", income: 19000, expense: 18000 },
-  { month: "Jun", income: 17000, expense: 19500 },
-  { month: "Jul", income: 16000, expense: 17000 },
-  { month: "Aug", income: 17500, expense: 18000 },
-  { month: "Sep", income: 18500, expense: 17500 },
-  { month: "Oct", income: 19000, expense: 18500 },
-  { month: "Nov", income: 18000, expense: 19000 },
-  { month: "Dec", income: 20000, expense: 19500 },
-];
-
-const pieData = [
-  { name: "Apparel", value: 800, color: "#7C3AED" },
-  { name: "Sports", value: 700, color: "#F59E42" },
-  { name: "Others", value: 492, color: "#F43F5E" },
-];
-
-const summaryData = [
-  { label: "Income", value: 92600, color: "#7C3AED" },
-  { label: "Profit", value: 37615, color: "#22C55E" },
-  { label: "Expenses", value: 65085, color: "#F43F5E" },
-];
-
-const recentActivities = [
-  { text: "Updated Server Logs", color: "#6366F1", time: "Just Now" },
-  { text: "Send Mail to HR and Admin", color: "#22C55E", time: "2 min ago" },
-  { text: "Backup Files EOD", color: "#F59E42", time: "14:00" },
-  { text: "Collect documents from Sara", color: "#6366F1", time: "18:00" },
-  { text: "Conference call with Marketing Manager.", color: "#F59E42", time: "17:00" },
-  { text: "Rebooted Server", color: "#6366F1", time: "18:00" },
-  { text: "Send contract details to Freelancer", color: "#6366F1", time: "17:00" },
-];
-
-const transactions = [
-  { name: "StarCode Kh", date: "10 Jan 1:00PM", amount: "+$36.11", color: "#22C55E" },
-  { name: "Cash withdrawal", date: "04 Jan 1:00PM", amount: "-$16.44", color: "#F43F5E" },
-  { name: "Amy Diaz", date: "10 Jan 1:00PM", amount: "+$66.44", color: "#22C55E" },
-  { name: "Netflix", date: "10 Jan 1:00PM", amount: "-$32.00", color: "#F43F5E" },
-  { name: "Daisy Anderson", date: "10 Jan 1:00PM", amount: "+$10.08", color: "#22C55E" },
-];
+import { useContext } from "react";
+import api from "../utils/api";
+import { useTheme } from "../context/ThemeContext";
+import { AppContext } from "../context/AppContext";
 
 export default function Dashboard() {
-  // Pie chart color
-  const COLORS = useMemo(() => pieData.map(d => d.color), []);
+  const { theme } = useTheme();
+  const { appMode, activeClient, loadingConfig } = useContext(AppContext);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [yearsList, setYearsList] = useState([]);
+
+
+
+  // Generate Year List (Current - 5 years)
+  useEffect(() => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let i = 0; i < 5; i++) {
+      years.push(currentYear - i);
+    }
+    setYearsList(years);
+  }, []);
+
+  const fetchData = async () => {
+    // If loading or in consultant mode and no client selected, don't fetch
+    if (loadingConfig || (appMode === 'consultant' && !activeClient)) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await api.get(`/dashboard/summary?year=${year}`);
+      setData(res.data);
+    } catch (err) {
+      console.error("Failed to fetch dashboard data", err);
+
+      // Show user-friendly error for consultant mode
+      if (appMode === 'consultant') {
+        setData({
+          error: true,
+          message: `Tidak dapat terhubung ke server client "${activeClient?.name}". Pastikan server client sudah berjalan di ${activeClient?.url}`,
+          suggestion: "Cek koneksi dengan tombol 'Test' di Consultant Settings"
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [year, activeClient]);
+
+  const COLORS = ["#6366F1", "#F43F5E", "#22C55E", "#F59E42", "#8B5CF6", "#EC4899"];
+
+  if (loadingConfig) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="animate-pulse flex space-x-2">
+          <div className="h-3 w-3 bg-indigo-500 rounded-full"></div>
+          <div className="h-3 w-3 bg-indigo-500 rounded-full"></div>
+          <div className="h-3 w-3 bg-indigo-500 rounded-full"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading && !data) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  if (appMode === 'consultant' && !activeClient) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[50vh] text-gray-500">
+        <svg className="w-16 h-16 mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+        <h2 className="text-xl font-semibold">Ready to Consult</h2>
+        <p>Please select a client from the top navigation bar to view their dashboard.</p>
+      </div>
+    )
+  }
+
+  // Show error state if data contains error
+  if (data?.error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[50vh] max-w-2xl mx-auto text-center px-4">
+        <svg className="w-20 h-20 mb-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <h2 className="text-2xl font-bold text-gray-800 mb-3">Tidak Dapat Terhubung ke Client Server</h2>
+        <p className="text-gray-600 mb-2">{data.message}</p>
+        <p className="text-sm text-gray-500 mb-6">{data.suggestion}</p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => window.location.href = '/consultant-settings'}
+            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+          >
+            Buka Consultant Settings
+          </button>
+          <button
+            onClick={() => fetchData()}
+            className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+          >
+            Coba Lagi
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const formatCurrency = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
   return (
     <motion.div
-      className="space-y-6"
-      initial={{ opacity: 0, y: 40 }}
+      className="space-y-6 pb-10"
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 40 }}
+      exit={{ opacity: 0, y: 20 }}
       transition={{ duration: 0.5 }}
     >
-      <h1 className="text-2xl font-bold tracking-tight">Dashboard Keuangan</h1>
+      <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-100" style={{ background: theme.cardColor, borderColor: theme.border }}>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>Financial Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-1">Overview keuangan perusahaan periode {year}</p>
+        </div>
+        <div className="mt-4 md:mt-0 flex items-center gap-3">
+          <span className="text-sm font-medium" style={{ color: theme.fontColor }}>Tahun:</span>
+          <select
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            className="border rounded-lg px-4 py-2 text-sm font-semibold shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none transition"
+            style={{ background: theme.fieldColor, color: theme.fontColor }}
+          >
+            {yearsList.map(y => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          <button
+            onClick={fetchData}
+            className="p-2 rounded-lg hover:bg-gray-100 transition"
+            title="Refresh Data"
+            style={{ color: theme.fontColor }}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+          </button>
+        </div>
+      </div>
 
-      {/* Top Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Revenue Chart */}
-        <div className="col-span-2 bg-white rounded-lg shadow p-4">
-          <h2 className="font-semibold text-lg mb-1">Revenue</h2>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm text-gray-500">Total Profit</span>
-            <span className="text-indigo-600 font-semibold">$10,840</span>
-          </div>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="income" stroke="#6366F1" strokeWidth={2} dot={false} name="Income" />
-              <Line type="monotone" dataKey="expense" stroke="#F43F5E" strokeWidth={2} dot={false} name="Expenses" />
-              <Legend />
-            </LineChart>
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KPICard title="Revenue (YTD)" amount={data?.kpi?.revenue} color="text-indigo-600" bg="bg-indigo-50" icon={<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />} theme={theme} />
+
+        <KPICard title="Net Profit (YTD)" amount={data?.kpi?.net_income} color="text-emerald-600" bg="bg-emerald-50" icon={<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />} theme={theme} />
+
+        <KPICard title="Cash Balance" amount={data?.kpi?.cash_balance} color="text-blue-600" bg="bg-blue-50" icon={<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />} theme={theme} />
+
+        <KPICard title="Total Assets" amount={data?.kpi?.total_assets} color="text-purple-600" bg="bg-purple-50" icon={<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />} theme={theme} />
+      </div>
+
+      {/* Main Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Trend Chart */}
+        <div className="lg:col-span-2 rounded-2xl shadow-sm border border-slate-100 p-6" style={{ background: theme.cardColor, borderColor: theme.border }}>
+          <h2 className="font-bold text-lg mb-6" style={{ color: theme.fontColor }}>Revenue & Profit Trend</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={data?.trend}>
+              <defs>
+                <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#6366F1" stopOpacity={0.1} />
+                  <stop offset="95%" stopColor="#6366F1" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#22C55E" stopOpacity={0.1} />
+                  <stop offset="95%" stopColor="#22C55E" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.border} />
+              <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 12 }} dy={10} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 12 }} tickFormatter={(val) => `${val / 1000000}M`} />
+              <Tooltip
+                contentStyle={{ backgroundColor: theme.cardColor, borderColor: theme.border, borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                itemStyle={{ color: theme.fontColor }}
+                formatter={(value) => formatCurrency(value)}
+              />
+              <Legend verticalAlign="top" height={36} />
+              <Area type="monotone" dataKey="revenue" stroke="#6366F1" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="Revenue" />
+              <Area type="monotone" dataKey="net_income" stroke="#22C55E" strokeWidth={3} fillOpacity={1} fill="url(#colorNet)" name="Net Profit" />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
-        {/* Sales By Category */}
-        <div className="bg-white rounded-lg shadow p-4 flex flex-col items-center justify-center">
-          <h2 className="font-semibold text-lg mb-2">Sales By Category</h2>
-          <ResponsiveContainer width="100%" height={180}>
-            <PieChart>
-              <Pie
-                data={pieData}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                innerRadius={45}
-                outerRadius={70}
-                fill="#8884d8"
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-              >
-                {pieData.map((entry, idx) => (
-                  <Cell key={`cell-${idx}`} fill={entry.color} />
+
+        {/* Asset Composition */}
+        <div className="rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col" style={{ background: theme.cardColor, borderColor: theme.border }}>
+          <h2 className="font-bold text-lg mb-2" style={{ color: theme.fontColor }}>Asset Composition</h2>
+          <div className="flex-1 min-h-[250px] relative">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={data?.composition}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                >
+                  {data?.composition?.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value) => formatCurrency(value)} />
+                <Legend verticalAlign="bottom" height={36} layout="horizontal" align="center"
+                  payload={
+                    data?.composition?.slice(0, 4).map((item, index) => ({
+                      id: item.name,
+                      type: "square",
+                      value: item.name,
+                      color: COLORS[index % COLORS.length]
+                    }))
+                  }
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            {/* Text in center */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-3xl font-bold" style={{ color: theme.fontColor }}>{data?.composition?.length}</span>
+              <span className="text-xs text-gray-500 uppercase tracking-widest">Types</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Cashflow & Structure */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Cashflow Bar */}
+        <div className="rounded-2xl shadow-sm border border-slate-100 p-6" style={{ background: theme.cardColor, borderColor: theme.border }}>
+          <h2 className="font-bold text-lg mb-6" style={{ color: theme.fontColor }}>Cash Flow Activities</h2>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={data?.cashflow} layout="vertical" margin={{ left: 40 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke={theme.border} />
+              <XAxis type="number" hide />
+              <YAxis dataKey="name" type="category" width={100} axisLine={false} tickLine={false} tick={{ fill: theme.fontColor, fontSize: 13, fontWeight: 500 }} />
+              <Tooltip cursor={{ fill: 'transparent' }} formatter={(value) => formatCurrency(value)} contentStyle={{ backgroundColor: theme.cardColor, borderColor: theme.border }} />
+              <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={30}>
+                {data?.cashflow?.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.value >= 0 ? "#10B981" : "#EF4444"} />
                 ))}
-              </Pie>
-              <Legend />
-            </PieChart>
+              </Bar>
+            </BarChart>
           </ResponsiveContainer>
-          <div className="text-center mt-2">
-            <span className="text-2xl font-bold">1992</span>
-            <div className="text-xs text-gray-500">Total</div>
-          </div>
         </div>
-      </div>
 
-      {/* Middle Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Daily Sales */}
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="font-semibold">Daily Sales</span>
-            <span className="bg-yellow-100 text-yellow-600 rounded-full px-2 py-1 text-xs flex items-center gap-1">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 8v4l3 3" /></svg>
-              $
-            </span>
-          </div>
-          <ResponsiveContainer width="100%" height={80}>
-            <LineChart data={chartData.slice(0, 7)}>
-              <XAxis dataKey="month" hide />
-              <YAxis hide />
-              <Tooltip />
-              <Line type="monotone" dataKey="income" stroke="#F59E42" strokeWidth={6} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-          <div className="text-xs text-gray-400 mt-1">Go to columns for details.</div>
-        </div>
-        {/* Summary */}
-        <div className="bg-white rounded-lg shadow p-4 flex flex-col justify-between">
-          <span className="font-semibold mb-2">Summary</span>
-          <div className="space-y-2">
-            {summaryData.map((item) => (
-              <div key={item.label} className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full" style={{ background: item.color }} />
-                <span className="text-sm font-medium w-20">{item.label}</span>
-                <div className="flex-1 bg-gray-100 rounded h-3 mx-2 overflow-hidden">
-                  <div
-                    className="h-3 rounded"
-                    style={{
-                      width: `${Math.min(item.value / 1000, 100)}%`,
-                      background: item.color,
-                      transition: "width 1s"
-                    }}
-                  />
-                </div>
-                <span className="text-xs font-bold">{item.value.toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        {/* Orders Chart */}
-        <div className="bg-white rounded-lg shadow p-4 flex flex-col">
-          <div className="flex items-center justify-between mb-2">
-            <span className="font-semibold">Orders</span>
-            <span className="text-indigo-600 font-bold text-lg">3,192</span>
-          </div>
-          <ResponsiveContainer width="100%" height={60}>
-            <LineChart data={chartData.slice(0, 7)}>
-              <XAxis dataKey="month" hide />
-              <YAxis hide />
-              <Tooltip />
-              <Line type="monotone" dataKey="expense" stroke="#6366F1" strokeWidth={3} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-          <div className="text-xs text-gray-400 mt-1">Total Orders</div>
-        </div>
-      </div>
-
-      {/* Bottom Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Recent Activities */}
-        <div className="bg-white rounded-lg shadow p-4">
-          <span className="font-semibold mb-2 block">Recent Activities</span>
-          <ul className="text-xs space-y-2">
-            {recentActivities.map((act, idx) => (
-              <li key={idx} className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full" style={{ background: act.color }} />
-                <span>{act.text}</span>
-                <span className="ml-auto text-gray-400">{act.time}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        {/* Transactions */}
-        <div className="bg-white rounded-lg shadow p-4">
-          <span className="font-semibold mb-2 block">Transactions</span>
-          <ul className="text-xs space-y-2">
-            {transactions.map((trx, idx) => (
-              <li key={idx} className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center font-bold text-indigo-600">{trx.name[0]}</span>
-                <span className="flex-1">{trx.name}</span>
-                <span className="text-gray-400">{trx.date}</span>
-                <span className="font-bold" style={{ color: trx.color }}>{trx.amount}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        {/* Wallet Balance */}
-        <div className="bg-gradient-to-r from-indigo-500 to-blue-400 rounded-lg shadow p-4 text-white flex flex-col">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-indigo-700 font-bold">SC</span>
-            <span className="font-semibold">StarCode Kh</span>
-          </div>
-          <div className="text-lg font-bold">Wallet Balance</div>
-          <div className="text-2xl font-bold mb-2">$2953</div>
-          <div className="flex gap-2">
-            <div className="flex-1 bg-white bg-opacity-20 rounded p-2">
-              <div className="text-xs">Received</div>
-              <div className="font-bold">$97.99</div>
-            </div>
-            <div className="flex-1 bg-white bg-opacity-20 rounded p-2">
-              <div className="text-xs">Spent</div>
-              <div className="font-bold">$53.00</div>
-            </div>
+        {/* Quick Stats Grid */}
+        <div className="rounded-2xl shadow-sm border border-slate-100 p-6" style={{ background: theme.cardColor, borderColor: theme.border }}>
+          <h2 className="font-bold text-lg mb-6" style={{ color: theme.fontColor }}>Detailed Summary</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <SummaryItem label="Total Expense" value={data?.kpi?.expense} color="text-red-500" />
+            <SummaryItem label="Liabilities" value={data?.kpi?.total_liabilities} color="text-orange-500" />
+            <SummaryItem label="Equity" value={data?.kpi?.total_equity} color="text-blue-500" />
+            <SummaryItem label="Net Margin" value={data?.kpi?.revenue ? ((data.kpi.net_income / data.kpi.revenue) * 100).toFixed(1) + "%" : "0%"} color="text-emerald-500" isText />
           </div>
         </div>
       </div>
     </motion.div>
+  );
+}
+
+function KPICard({ title, amount, color, bg, icon, theme }) {
+  const formatted = new Intl.NumberFormat('id-ID').format(amount || 0);
+  return (
+    <div className="rounded-2xl p-6 shadow-sm border border-slate-100 transition-all hover:shadow-md" style={{ background: theme.cardColor, borderColor: theme.border }}>
+      <div className="flex justify-between items-start mb-4">
+        <div className={`p-3 rounded-xl ${bg} ${color}`}>
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {icon}
+          </svg>
+        </div>
+        {/* Optional Trend indicator could go here */}
+      </div>
+      <div>
+        <h3 className="text-sm font-medium text-gray-500 mb-1">{title}</h3>
+        <h2 className={`text-2xl font-bold ${color}`} style={{ fontFamily: theme.fontFamily }}>
+          <span className="text-sm font-normal text-gray-400 mr-1">Rp</span>
+          {formatted}
+        </h2>
+      </div>
+    </div>
+  );
+}
+
+function SummaryItem({ label, value, color, isText = false }) {
+  const formatted = isText ? value : new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(value || 0);
+  return (
+    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+      <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">{label}</div>
+      <div className={`text-lg font-bold ${color}`}>{formatted}</div>
+    </div>
   );
 }

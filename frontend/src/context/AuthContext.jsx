@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }) => {
         try {
           // Parse user data
           const userData = JSON.parse(savedUser);
-          
+
           // Basic validation - check if token exists and user data is valid
           if (savedToken.trim() && userData && userData.id) {
             setToken(savedToken);
@@ -59,7 +59,7 @@ export const AuthProvider = ({ children }) => {
       // Call logout API to clear server-side session
       const token = localStorage.getItem("token");
       if (token) {
-        await fetch(`${import.meta.env.VITE_API_URL}/logout`, {
+        await fetch(`${import.meta.env.VITE_API_URL || "/api"}/logout`, {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${token}`,

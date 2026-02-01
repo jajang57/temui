@@ -85,6 +85,24 @@ func PostingAJE(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		// Generate Nomor Jurnal (one for the entire transaction)
+		var tJurnal time.Time
+		if len(ajes) > 0 {
+			if ts, err := time.Parse("2006-01-02", ajes[0].Tanggal); err == nil {
+				tJurnal = ts
+			} else {
+				tJurnal = time.Now()
+			}
+		} else {
+			tJurnal = time.Now()
+		}
+
+		nomorJurnal, err := GenerateNomorJurnal(db, tJurnal)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal generate nomor jurnal"})
+			return
+		}
+
 		// Insert ke GL (tanpa double entry, plus simpan tipe akun)
 		for _, a := range ajes {
 			var t time.Time
@@ -101,6 +119,7 @@ func PostingAJE(db *gorm.DB) gin.HandlerFunc {
 				Debit:          a.Debit,
 				Kredit:         a.Kredit,
 				NomorTransaksi: a.NoBukti,
+				NomorJurnal:    nomorJurnal,
 				ProjectNo:      a.ProjectNo,
 				ProjectName:    a.ProjectName,
 			}

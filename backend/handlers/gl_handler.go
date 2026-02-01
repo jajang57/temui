@@ -11,8 +11,13 @@ import (
 // GET /api/gl
 func GetGLs(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		nomorTransaksi := c.Query("nomor_transaksi")
 		var gls []models.GL
-		if err := db.Find(&gls).Error; err != nil {
+		query := db
+		if nomorTransaksi != "" {
+			query = query.Where("nomor_transaksi = ?", nomorTransaksi)
+		}
+		if err := query.Find(&gls).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}

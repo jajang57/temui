@@ -1,0 +1,15 @@
+{
+    "$schema": "https://wails.io/schemas/config.v2.json",
+    "name": "temui-launcher",
+    "outputfilename": "temui-launcher.exe",
+    "frontend:dir": "frontend",
+    "author": {
+        "name": "Temui Team"
+    },
+    "info": {
+        "productName": "Temui Launcher",
+        "productVersion": "1.0.0",
+        "copyright": "Copyright © 2026",
+        "comments": "XAMPP-style controller for Temui"
+    }
+}

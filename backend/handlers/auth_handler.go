@@ -5,8 +5,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"os"
+	"project-akuntansi-backend/database"
 	"project-akuntansi-backend/models"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -14,12 +15,34 @@ import (
 	"gorm.io/gorm"
 )
 
-var jwtSecret = []byte("your-secret-key-here") // Ganti dengan secret key yang aman
+var jwtSecret = []byte(os.Getenv("JWT_SECRET"))
+
+func init() {
+	if len(jwtSecret) == 0 {
+		jwtSecret = []byte("your-secret-key-here") // Fallback
+	}
+}
+
+// ... (skip types) ...
+
+// (Inside AuthMiddleware)
+// Validasi apakah token yang digunakan masih sama dengan yang tersimpan (single device)
+// DISABLE FOR PROXY MODE: Karena DB Consultant & Client beda, token aktif tidak akan sinkron.
+// if strings.TrimSpace(user.ActiveToken) != strings.TrimSpace(tokenString) {
+// 	fmt.Printf("[DEBUG AUTH] Token mismatch. DB token: %s, Request token: %s\n", user.ActiveToken, tokenString)
+// 	c.JSON(http.StatusUnauthorized, gin.H{
+// 		"error": "Session telah berakhir. Akun Anda sedang digunakan di device lain.",
+// 		"code":  "SINGLE_DEVICE_VIOLATION",
+// 	})
+// 	c.Abort()
+// 	return
+// }
 
 type Claims struct {
 	UserID    uint   `json:"user_id"`
 	Username  string `json:"username"`
-	SessionID string `json:"session_id"` // Tambah session ID untuk validasi device
+	SessionID string `json:"session_id"`          // Tambah session ID untuk validasi device
+	ClientID  string `json:"client_id,omitempty"` // NEW: Bind token to specific client
 	jwt.RegisteredClaims
 }
 
@@ -27,7 +50,8 @@ type Claims struct {
 type LoginRequest struct {
 	Username   string `json:"username" binding:"required"`
 	Password   string `json:"password" binding:"required"`
-	DeviceInfo string `json:"deviceInfo"` // Info device/browser
+	ClientID   string `json:"client_id"` // NEW: Optional client selection
+	DeviceInfo string `json:"deviceInfo"`
 }
 
 // RegisterRequest - Structure untuk request register
@@ -94,7 +118,7 @@ func Register(db *gorm.DB) gin.HandlerFunc {
 }
 
 // POST /api/login
-func Login(db *gorm.DB) gin.HandlerFunc {
+func Login(masterDB *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req LoginRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -102,9 +126,38 @@ func Login(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Cari user berdasarkan username
+		var targetDB *gorm.DB
+		targetDB = masterDB // Default to Master DB (Local Login)
+
+		// Jika ClientID dipilih, switch ke DB Client
+		if req.ClientID != "" {
+			var clientReg models.ClientRegistry
+			if err := masterDB.Where("id = ?", req.ClientID).First(&clientReg).Error; err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Client ID"})
+				return
+			}
+
+			// Connect ke Client DB
+			clientConn, err := database.GetClientDB(req.ClientID, clientReg.DBConfig)
+			if err != nil {
+				c.JSON(http.StatusBadGateway, gin.H{"error": "Gagal terhubung ke Database Client: " + err.Error()})
+				return
+			}
+			targetDB = clientConn
+		}
+
+		// Cari user di Target DB
 		var user models.User
-		if err := db.Where("username = ?", req.Username).First(&user).Error; err != nil {
+		if err := targetDB.Where("username = ?", req.Username).First(&user).Error; err != nil {
+			// Jika user tidak ditemukan di Client DB, sarankan register
+			if req.ClientID != "" {
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"error":      "User tidak ditemukan di Database Klien ini.",
+					"code":       "USER_NOT_FOUND_CLIENT",
+					"suggestion": "Silakan buat akun Konsultan baru di klien ini.",
+				})
+				return
+			}
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Username atau password salah"})
 			return
 		}
@@ -115,46 +168,38 @@ func Login(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Generate session ID untuk device tracking
+		// Validasi Role Consultant (Jika login ke Client DB)
+		if req.ClientID != "" && user.Role != "consultant" && user.Role != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Akun ini bukan akun Konsultan."})
+			return
+		}
+
+		// Generate session ID
 		sessionID, err := generateSessionID()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat session"})
 			return
 		}
 
-		// Generate JWT token dengan session ID
-		token, err := generateToken(user.ID, user.Username, sessionID)
+		// Generate JWT token dengan extension ClientID
+		token, err := generateToken(user.ID, user.Username, sessionID, req.ClientID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat token"})
 			return
 		}
 
-		// Get device info from request
+		// Update user info
 		deviceInfo := req.DeviceInfo
 		if deviceInfo == "" {
 			deviceInfo = c.GetHeader("User-Agent")
 		}
-
-		// Update user dengan token dan device info terbaru
 		now := time.Now()
-		updateData := map[string]interface{}{
+		targetDB.Model(&user).Updates(map[string]interface{}{
 			"active_token":  token,
 			"device_info":   deviceInfo,
 			"last_login_at": &now,
-		}
+		})
 
-		if err := db.Model(&user).Updates(updateData).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal update session"})
-			return
-		}
-
-		// Refresh user data
-		if err := db.First(&user, user.ID).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data user"})
-			return
-		}
-
-		// Response dengan token dan user data
 		response := LoginResponse{
 			Token: token,
 			User:  user,
@@ -196,12 +241,13 @@ func generateSessionID() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-// generateToken - Generate JWT token with session ID
-func generateToken(userID uint, username string, sessionID string) (string, error) {
+// generateToken - Generate JWT token with session ID and ClientID
+func generateToken(userID uint, username string, sessionID string, clientID string) (string, error) {
 	claims := Claims{
 		UserID:    userID,
 		Username:  username,
 		SessionID: sessionID,
+		ClientID:  clientID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)), // Token berlaku 24 jam
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -212,11 +258,11 @@ func generateToken(userID uint, username string, sessionID string) (string, erro
 	return token.SignedString(jwtSecret)
 }
 
-// AuthMiddleware - Middleware untuk melindungi route yang butuh authentication dengan single device validation
-func AuthMiddleware() gin.HandlerFunc {
+// AuthMiddleware - Middleware untuk melindungi route yang butuh authentication
+// Accepts masterDB to validate token against central user registry
+func AuthMiddleware(masterDB *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString := c.GetHeader("Authorization")
-		fmt.Printf("[DEBUG AUTH] Raw Authorization header: %s\n", tokenString)
 
 		// Hapus "Bearer " prefix jika ada
 		if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
@@ -224,13 +270,10 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		if tokenString == "" {
-			fmt.Printf("[DEBUG AUTH] No token found\n")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token tidak ditemukan"})
 			c.Abort()
 			return
 		}
-
-		fmt.Printf("[DEBUG AUTH] Token: %s\n", tokenString)
 
 		// Parse token
 		token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
@@ -238,48 +281,63 @@ func AuthMiddleware() gin.HandlerFunc {
 		})
 
 		if err != nil || !token.Valid {
-			fmt.Printf("[DEBUG AUTH] Token parse error: %v, valid: %v\n", err, token.Valid)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token tidak valid"})
 			c.Abort()
 			return
 		}
 
-		// Validasi claims dan single device login
+		// Validasi claims
 		if claims, ok := token.Claims.(*Claims); ok {
-			fmt.Printf("[DEBUG AUTH] Claims: UserID=%d, Username=%s\n", claims.UserID, claims.Username)
-			
-			// Get database connection from context atau setup
-			db := c.MustGet("db").(*gorm.DB)
 
-			// Cek apakah token masih aktif di database
-			var user models.User
-			if err := db.First(&user, claims.UserID).Error; err != nil {
-				fmt.Printf("[DEBUG AUTH] User not found in DB: %v\n", err)
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "User tidak ditemukan"})
+			// 1. Validate User against MASTER DB (Always)
+			var masterUser models.User
+			if err := masterDB.First(&masterUser, claims.UserID).Error; err != nil {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "User tidak ditemukan (Master DB)"})
 				c.Abort()
 				return
 			}
 
-			// Validasi apakah token yang digunakan masih sama dengan yang tersimpan (single device)
-			if strings.TrimSpace(user.ActiveToken) != strings.TrimSpace(tokenString) {
-				fmt.Printf("[DEBUG AUTH] Token mismatch. DB token: %s, Request token: %s\n", user.ActiveToken, tokenString)
-				c.JSON(http.StatusUnauthorized, gin.H{
-					"error": "Session telah berakhir. Akun Anda sedang digunakan di device lain.",
-					"code":  "SINGLE_DEVICE_VIOLATION",
-				})
-				c.Abort()
-				return
-			}
+			// 2. Determine Context Context (Client DB or Master DB)
+			currentDB := c.MustGet("db").(*gorm.DB)
 
-			fmt.Printf("[DEBUG AUTH] Authentication successful for user: %s\n", claims.Username)
+			// Jika currentDB != masterDB (artinya kita sedang akses Client DB via Dynamic Middleware)
+			// Kita harus pastikan user ini ada di Client DB untuk referensi Audit Trail (FK)
+			// NOTE: Kita gunakan pointer comparison atau check object
+			// Cara aman: cek apakah clientID header ada
+			clientID := c.GetHeader("X-Target-Client-ID")
+
+			finalUserID := masterUser.ID
+
+			if clientID != "" {
+				// Kita sedang di mode akses ID
+				// Sync User Konsultan ke Client DB "Shadow User"
+				var clientUser models.User
+				// Cari by username
+				if err := currentDB.Where("username = ?", masterUser.Username).First(&clientUser).Error; err != nil {
+					// Jika tidak ada, buat user baru di Client DB
+					clientUser = models.User{
+						Username: masterUser.Username,
+						FullName: masterUser.FullName + " (Consultant)",
+						Role:     "consultant",
+						Password: masterUser.Password, // Copy hash is fine, or random
+					}
+					if err := currentDB.Create(&clientUser).Error; err != nil {
+						fmt.Printf("Failed to sync consultant user to client DB: %v\n", err)
+						// Non-fatal? Audit trail might fail.
+					}
+				}
+				// GANTI userID di context menjadi ID versi Client DB
+				// Agar audit trail masuk ke ID yang benar di tabel users lokal
+				finalUserID = clientUser.ID
+			}
 
 			// Simpan data user ke context
-			c.Set("userID", claims.UserID)
-			c.Set("username", claims.Username)
+			c.Set("userID", finalUserID) // ID Lokal (bisa beda dengan Master ID)
+			c.Set("username", masterUser.Username)
 			c.Set("sessionID", claims.SessionID)
-			c.Set("user", user)
+			c.Set("user", masterUser) // Object User tetap Master User untuk referensi detail
+			c.Set("isConsultant", true)
 		} else {
-			fmt.Printf("[DEBUG AUTH] Invalid token claims\n")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token claims tidak valid"})
 			c.Abort()
 			return

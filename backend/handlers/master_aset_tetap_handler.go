@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"fmt"
-	"project-akuntansi-backend/models"
 	"net/http"
+	"project-akuntansi-backend/models"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -85,7 +85,7 @@ func CreateMasterAsetTetap(db *gorm.DB) gin.HandlerFunc {
 			AkunLawan               string  `json:"akunLawan"`
 			Keterangan              string  `json:"keterangan"`
 		}
-		
+
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -168,7 +168,7 @@ func UpdateMasterAsetTetap(db *gorm.DB) gin.HandlerFunc {
 			AkunLawan               string  `json:"akunLawan"`
 			Keterangan              string  `json:"keterangan"`
 		}
-		
+
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -263,27 +263,28 @@ func DeleteMasterAsetTetap(db *gorm.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"message": "Data berhasil dihapus"})
 	}
 }
+
 // AssetRegistrationItem represents pembelian item available for asset registration
 type AssetRegistrationItem struct {
-	PembelianID         uint    `json:"pembelianId"`
-	NomorAPInvoice      string  `json:"nomorAPInvoice"`
-	TanggalPembelian    string  `json:"tanggalPembelian"`
-	DetailID            uint    `json:"detailId"`
-	KodeItem            string  `json:"kodeItem"`
-	NamaItem            string  `json:"namaItem"`
-	Qty                 float64 `json:"qty"`
-	Price               float64 `json:"price"`
-	TotalPrice          float64 `json:"totalPrice"`
-	SudahDiregister     bool    `json:"sudahDiregister"`
-	KodePemasok         string  `json:"kodePemasok"`
-	NamaPemasok         string  `json:"namaPemasok"`
+	PembelianID      uint    `json:"pembelianId"`
+	NomorAPInvoice   string  `json:"nomorAPInvoice"`
+	TanggalPembelian string  `json:"tanggalPembelian"`
+	DetailID         uint    `json:"detailId"`
+	KodeItem         string  `json:"kodeItem"`
+	NamaItem         string  `json:"namaItem"`
+	Qty              float64 `json:"qty"`
+	Price            float64 `json:"price"`
+	TotalPrice       float64 `json:"totalPrice"`
+	SudahDiregister  bool    `json:"sudahDiregister"`
+	KodePemasok      string  `json:"kodePemasok"`
+	NamaPemasok      string  `json:"namaPemasok"`
 }
 
 // GetPembelianItemsForAssetRegistration - Get pembelian items that can be registered as assets
 func GetPembelianItemsForAssetRegistration(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var pembelians []models.Pembelian
-		
+
 		// Get all pembelian with details and supplier preloaded
 		if err := db.Preload("Details").Preload("Supplier").Find(&pembelians).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -304,7 +305,7 @@ func GetPembelianItemsForAssetRegistration(db *gorm.DB) gin.HandlerFunc {
 				if barangJasa.IsAsetTetap {
 					// Check if already registered
 					var existingAsset models.MasterAsetTetap
-					isRegistered := db.Where("nomor_transaksi_pembelian = ? AND kode_pembelian = ?", 
+					isRegistered := db.Where("nomor_transaksi_pembelian = ? AND kode_pembelian = ?",
 						pembelian.NomorAPInvoice, detail.KodeItem).First(&existingAsset).Error == nil
 
 					var kodePemasok, namaPemasok string
@@ -331,7 +332,7 @@ func GetPembelianItemsForAssetRegistration(db *gorm.DB) gin.HandlerFunc {
 			}
 		}
 
-			c.JSON(http.StatusOK, items)
+		c.JSON(http.StatusOK, items)
 	}
 }
 
@@ -353,7 +354,7 @@ func PostAssetsToGL(db *gorm.DB) gin.HandlerFunc {
 		var request struct {
 			AssetIDs []uint `json:"assetIds" binding:"required"`
 		}
-		
+
 		if err := c.ShouldBindJSON(&request); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -373,7 +374,7 @@ func PostAssetsToGL(db *gorm.DB) gin.HandlerFunc {
 		}()
 
 		var postedAssets []models.MasterAsetTetap
-		
+
 		for _, assetID := range request.AssetIDs {
 			var asset models.MasterAsetTetap
 			if err := tx.First(&asset, assetID).Error; err != nil {
@@ -425,6 +426,13 @@ func PostAssetsToGL(db *gorm.DB) gin.HandlerFunc {
 			nomorTransaksi := fmt.Sprintf("POSTING-ASET-%s-%d", asset.KodeAset, time.Now().Unix())
 			tanggalPosting := time.Now()
 
+			nomorJurnal, err := GenerateNomorJurnal(tx, tanggalPosting)
+			if err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate nomor jurnal"})
+				return
+			}
+
 			// Create GL entry - Debit: Aset Tetap
 			glDebit := models.GL{
 				Tanggal:        tanggalPosting,
@@ -433,6 +441,7 @@ func PostAssetsToGL(db *gorm.DB) gin.HandlerFunc {
 				Debit:          asset.HargaPerolehan,
 				Kredit:         0,
 				NomorTransaksi: nomorTransaksi,
+				NomorJurnal:    nomorJurnal,
 			}
 			if err := tx.Create(&glDebit).Error; err != nil {
 				tx.Rollback()
@@ -448,6 +457,7 @@ func PostAssetsToGL(db *gorm.DB) gin.HandlerFunc {
 				Debit:          0,
 				Kredit:         asset.HargaPerolehan,
 				NomorTransaksi: nomorTransaksi,
+				NomorJurnal:    nomorJurnal,
 			}
 			if err := tx.Create(&glKredit).Error; err != nil {
 				tx.Rollback()
@@ -478,6 +488,7 @@ func PostAssetsToGL(db *gorm.DB) gin.HandlerFunc {
 		})
 	}
 }
+
 // AssetDepreciationData represents data for calculating depreciation
 type AssetDepreciationData struct {
 	ID                      uint    `json:"id"`
@@ -505,35 +516,35 @@ func GetAssetsForDepreciation(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tanggalMulai := c.Query("tanggalMulai")
 		tanggalAkhir := c.Query("tanggalAkhir")
-		
+
 		if tanggalMulai == "" || tanggalAkhir == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "tanggalMulai dan tanggalAkhir parameter required (format: YYYY-MM-DD)"})
 			return
 		}
 
-startDate, err := time.Parse("2006-01-02", tanggalMulai)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tanggalMulai format, use YYYY-MM-DD"})
-		return
-	}
+		startDate, err := time.Parse("2006-01-02", tanggalMulai)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tanggalMulai format, use YYYY-MM-DD"})
+			return
+		}
 
-	endDate, err := time.Parse("2006-01-02", tanggalAkhir)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tanggalAkhir format, use YYYY-MM-DD"})
-		return
-	}
+		endDate, err := time.Parse("2006-01-02", tanggalAkhir)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tanggalAkhir format, use YYYY-MM-DD"})
+			return
+		}
 
-	// Calculate number of months in the date range
-	monthsDiff := (endDate.Year()-startDate.Year())*12 + int(endDate.Month()-startDate.Month()) + 1
-	if monthsDiff < 1 {
-		monthsDiff = 1
-	}
+		// Calculate number of months in the date range
+		monthsDiff := (endDate.Year()-startDate.Year())*12 + int(endDate.Month()-startDate.Month()) + 1
+		if monthsDiff < 1 {
+			monthsDiff = 1
+		}
 
-	var assets []models.MasterAsetTetap
-	if err := db.Where("status_posting = ?", "Posted").Order("kode_aset ASC").Find(&assets).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
+		var assets []models.MasterAsetTetap
+		if err := db.Where("status_posting = ?", "Posted").Order("kode_aset ASC").Find(&assets).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 
 		var result []AssetDepreciationData
 
@@ -554,96 +565,98 @@ startDate, err := time.Parse("2006-01-02", tanggalMulai)
 				continue
 			}
 
-		// Generate one row for each month in the range
-		currentMonth := time.Date(startDate.Year(), startDate.Month(), 1, 0, 0, 0, 0, time.UTC)
-		endMonth := time.Date(endDate.Year(), endDate.Month(), 1, 0, 0, 0, 0, time.UTC)
+			// Generate one row for each month in the range
+			currentMonth := time.Date(startDate.Year(), startDate.Month(), 1, 0, 0, 0, 0, time.UTC)
+			endMonth := time.Date(endDate.Year(), endDate.Month(), 1, 0, 0, 0, 0, time.UTC)
 
-		for currentMonth.Before(endMonth) || currentMonth.Equal(endMonth) {
-			// Skip months before depreciation start date
-			if currentMonth.Before(time.Date(tanggalMulaiPenyusutan.Year(), tanggalMulaiPenyusutan.Month(), 1, 0, 0, 0, 0, time.UTC)) {
+			for currentMonth.Before(endMonth) || currentMonth.Equal(endMonth) {
+				// Skip months before depreciation start date
+				if currentMonth.Before(time.Date(tanggalMulaiPenyusutan.Year(), tanggalMulaiPenyusutan.Month(), 1, 0, 0, 0, 0, time.UTC)) {
+					currentMonth = currentMonth.AddDate(0, 1, 0)
+					continue
+				}
+
+				// Check if depreciation period exceeds economic life
+				startDepreciationMonth := time.Date(tanggalMulaiPenyusutan.Year(), tanggalMulaiPenyusutan.Month(), 1, 0, 0, 0, 0, time.UTC)
+				monthsElapsed := (currentMonth.Year()-startDepreciationMonth.Year())*12 + int(currentMonth.Month()-startDepreciationMonth.Month()) + 1
+
+				if monthsElapsed > asset.UmurEkonomis {
+					currentMonth = currentMonth.AddDate(0, 1, 0)
+					continue
+				}
+
+				periode := currentMonth.Format("2006-01")
+
+				// Get accumulated depreciation up to this month
+				var totalAkumulasi float64
+				db.Model(&models.HistoriPenyusutan{}).
+					Where("kode_aset = ? AND status_posting = ? AND periode < ?", asset.KodeAset, "Posted", periode).
+					Select("COALESCE(SUM(nilai_penyusutan), 0)").
+					Scan(&totalAkumulasi)
+
+				// Check if this month is already posted
+				var count int64
+				db.Model(&models.HistoriPenyusutan{}).
+					Where("kode_aset = ? AND periode = ?", asset.KodeAset, periode).
+					Count(&count)
+
+				var penyusutanBulanan float64
+				if asset.MetodePenyusutan == "Garis Lurus" {
+					if asset.UmurEkonomis > 0 {
+						penyusutanBulanan = (asset.HargaPerolehan - asset.NilaiResidu) / float64(asset.UmurEkonomis)
+					}
+				} else if asset.MetodePenyusutan == "Saldo Menurun" {
+					nilaiBuku := asset.HargaPerolehan - totalAkumulasi
+					if nilaiBuku > asset.NilaiResidu && asset.UmurEkonomis > 0 {
+						penyusutanBulanan = nilaiBuku / float64(asset.UmurEkonomis)
+					}
+				}
+
+				nilaiBuku := asset.HargaPerolehan - totalAkumulasi
+				if nilaiBuku-penyusutanBulanan < asset.NilaiResidu {
+					penyusutanBulanan = nilaiBuku - asset.NilaiResidu
+				}
+
+				if penyusutanBulanan <= 0 {
+					currentMonth = currentMonth.AddDate(0, 1, 0)
+					continue
+				}
+
+				// Format tanggalMulaiPenyusutan for display
+				tanggalMulaiPenyusutanStr := ""
+				if !tanggalMulaiPenyusutan.IsZero() {
+					tanggalMulaiPenyusutanStr = tanggalMulaiPenyusutan.Format("2006-01-02")
+				}
+
+				result = append(result, AssetDepreciationData{
+					ID:                      asset.ID,
+					Periode:                 periode,
+					KodeAset:                asset.KodeAset,
+					NamaAset:                asset.NamaAset,
+					KategoriAset:            asset.KategoriAset,
+					TanggalPerolehan:        asset.TanggalPerolehan.Format("2006-01-02"),
+					TanggalMulaiPenyusutan:  tanggalMulaiPenyusutanStr,
+					HargaPerolehan:          asset.HargaPerolehan,
+					NilaiResidu:             asset.NilaiResidu,
+					UmurEkonomis:            asset.UmurEkonomis,
+					MetodePenyusutan:        asset.MetodePenyusutan,
+					AkunAsetTetap:           asset.AkunAsetTetap,
+					AkunAkumulasiPenyusutan: asset.AkunAkumulasiPenyusutan,
+					AkunBebanPenyusutan:     asset.AkunBebanPenyusutan,
+					AkumulasiPenyusutan:     totalAkumulasi,
+					NilaiBuku:               nilaiBuku,
+					PenyusutanBulanan:       penyusutanBulanan,
+					SudahDisusutkan:         count > 0,
+				})
+
 				currentMonth = currentMonth.AddDate(0, 1, 0)
-				continue
 			}
-
-		// Check if depreciation period exceeds economic life
-		startDepreciationMonth := time.Date(tanggalMulaiPenyusutan.Year(), tanggalMulaiPenyusutan.Month(), 1, 0, 0, 0, 0, time.UTC)
-		monthsElapsed := (currentMonth.Year()-startDepreciationMonth.Year())*12 + int(currentMonth.Month()-startDepreciationMonth.Month()) + 1
-		
-		if monthsElapsed > asset.UmurEkonomis {
-			currentMonth = currentMonth.AddDate(0, 1, 0)
-			continue
 		}
 
-	periode := currentMonth.Format("2006-01")
-
-	// Get accumulated depreciation up to this month
-	var totalAkumulasi float64
-	db.Model(&models.HistoriPenyusutan{}).
-		Where("kode_aset = ? AND status_posting = ? AND periode < ?", asset.KodeAset, "Posted", periode).
-		Select("COALESCE(SUM(nilai_penyusutan), 0)").
-		Scan(&totalAkumulasi)
-
-	// Check if this month is already posted
-	var count int64
-	db.Model(&models.HistoriPenyusutan{}).
-		Where("kode_aset = ? AND periode = ?", asset.KodeAset, periode).
-		Count(&count)
-
-	var penyusutanBulanan float64
-	if asset.MetodePenyusutan == "Garis Lurus" {
-		if asset.UmurEkonomis > 0 {
-			penyusutanBulanan = (asset.HargaPerolehan - asset.NilaiResidu) / float64(asset.UmurEkonomis)
-		}
-	} else if asset.MetodePenyusutan == "Saldo Menurun" {
-		nilaiBuku := asset.HargaPerolehan - totalAkumulasi
-		if nilaiBuku > asset.NilaiResidu && asset.UmurEkonomis > 0 {
-			penyusutanBulanan = nilaiBuku / float64(asset.UmurEkonomis)
-		}
+		c.JSON(http.StatusOK, result)
 	}
-
-	nilaiBuku := asset.HargaPerolehan - totalAkumulasi
-	if nilaiBuku-penyusutanBulanan < asset.NilaiResidu {
-		penyusutanBulanan = nilaiBuku - asset.NilaiResidu
-	}
-
-	if penyusutanBulanan <= 0 {
-		currentMonth = currentMonth.AddDate(0, 1, 0)
-		continue
-	}
-
-	// Format tanggalMulaiPenyusutan for display
-	tanggalMulaiPenyusutanStr := ""
-	if !tanggalMulaiPenyusutan.IsZero() {
-		tanggalMulaiPenyusutanStr = tanggalMulaiPenyusutan.Format("2006-01-02")
-	}
-
-	result = append(result, AssetDepreciationData{
-		ID:                      asset.ID,
-		Periode:                 periode,
-		KodeAset:                asset.KodeAset,
-		NamaAset:                asset.NamaAset,
-		KategoriAset:            asset.KategoriAset,
-		TanggalPerolehan:        asset.TanggalPerolehan.Format("2006-01-02"),
-		TanggalMulaiPenyusutan:  tanggalMulaiPenyusutanStr,
-		HargaPerolehan:          asset.HargaPerolehan,
-		NilaiResidu:             asset.NilaiResidu,
-		UmurEkonomis:            asset.UmurEkonomis,
-		MetodePenyusutan:        asset.MetodePenyusutan,
-		AkunAsetTetap:           asset.AkunAsetTetap,
-		AkunAkumulasiPenyusutan: asset.AkunAkumulasiPenyusutan,
-		AkunBebanPenyusutan:     asset.AkunBebanPenyusutan,
-		AkumulasiPenyusutan:     totalAkumulasi,
-		NilaiBuku:               nilaiBuku,
-		PenyusutanBulanan:       penyusutanBulanan,
-		SudahDisusutkan:         count > 0,
-	})
-
-	currentMonth = currentMonth.AddDate(0, 1, 0)}
 }
 
-c.JSON(http.StatusOK, result)
-}
-}
 // PostDepreciationToGL - Calculate and post depreciation to GL
 func PostDepreciationToGL(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -683,26 +696,26 @@ func PostDepreciationToGL(db *gorm.DB) gin.HandlerFunc {
 			}
 			tanggalPenyusutan := time.Date(periodeDate.Year(), periodeDate.Month()+1, 0, 0, 0, 0, 0, time.UTC)
 
-		var asset models.MasterAsetTetap
-		if err := tx.First(&asset, assetData.ID).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("Asset ID %d not found", assetData.ID)})
-			return
-		}
+			var asset models.MasterAsetTetap
+			if err := tx.First(&asset, assetData.ID).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("Asset ID %d not found", assetData.ID)})
+				return
+			}
 
-		var existingCount int64
-		tx.Model(&models.HistoriPenyusutan{}).
-			Where("kode_aset = ? AND periode = ?", asset.KodeAset, assetData.Periode).
-			Count(&existingCount)
+			var existingCount int64
+			tx.Model(&models.HistoriPenyusutan{}).
+				Where("kode_aset = ? AND periode = ?", asset.KodeAset, assetData.Periode).
+				Count(&existingCount)
 
-		if existingCount > 0 {
-			tx.Rollback()
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Asset %s already has depreciation posted for period %s", asset.KodeAset, assetData.Periode)})
-			return
-		}
-		var totalAkumulasi float64
-		tx.Model(&models.HistoriPenyusutan{}).
-			Where("kode_aset = ? AND status_posting = ? AND periode < ?", asset.KodeAset, "Posted", assetData.Periode).
+			if existingCount > 0 {
+				tx.Rollback()
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Asset %s already has depreciation posted for period %s", asset.KodeAset, assetData.Periode)})
+				return
+			}
+			var totalAkumulasi float64
+			tx.Model(&models.HistoriPenyusutan{}).
+				Where("kode_aset = ? AND status_posting = ? AND periode < ?", asset.KodeAset, "Posted", assetData.Periode).
 				Scan(&totalAkumulasi)
 
 			var penyusutanBulanan float64
@@ -728,15 +741,23 @@ func PostDepreciationToGL(db *gorm.DB) gin.HandlerFunc {
 				return
 			}
 
-		nomorTransaksi := fmt.Sprintf("DEP-%s-%s-%d", asset.KodeAset, assetData.Periode, time.Now().Unix())
+			nomorTransaksi := fmt.Sprintf("DEP-%s-%s-%d", asset.KodeAset, assetData.Periode, time.Now().Unix())
 
-		glDebit := models.GL{
-			Tanggal:        tanggalPenyusutan,
-			AkunTransaksi:  asset.AkunBebanPenyusutan,
-			Deskripsi:      fmt.Sprintf("Penyusutan %s - %s", asset.NamaAset, assetData.Periode),
+			nomorJurnal, err := GenerateNomorJurnal(tx, tanggalPenyusutan)
+			if err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate nomor jurnal"})
+				return
+			}
+
+			glDebit := models.GL{
+				Tanggal:        tanggalPenyusutan,
+				AkunTransaksi:  asset.AkunBebanPenyusutan,
+				Deskripsi:      fmt.Sprintf("Penyusutan %s - %s", asset.NamaAset, assetData.Periode),
 				Debit:          penyusutanBulanan,
 				Kredit:         0,
 				NomorTransaksi: nomorTransaksi,
+				NomorJurnal:    nomorJurnal,
 			}
 			if err := tx.Create(&glDebit).Error; err != nil {
 				tx.Rollback()
@@ -747,10 +768,11 @@ func PostDepreciationToGL(db *gorm.DB) gin.HandlerFunc {
 			glKredit := models.GL{
 				Tanggal:        tanggalPenyusutan,
 				AkunTransaksi:  asset.AkunAkumulasiPenyusutan,
-			Deskripsi:      fmt.Sprintf("Akumulasi Penyusutan %s - %s", asset.NamaAset, assetData.Periode),
+				Deskripsi:      fmt.Sprintf("Akumulasi Penyusutan %s - %s", asset.NamaAset, assetData.Periode),
 				Debit:          0,
 				Kredit:         penyusutanBulanan,
 				NomorTransaksi: nomorTransaksi,
+				NomorJurnal:    nomorJurnal,
 			}
 			if err := tx.Create(&glKredit).Error; err != nil {
 				tx.Rollback()
@@ -764,16 +786,16 @@ func PostDepreciationToGL(db *gorm.DB) gin.HandlerFunc {
 			histori := models.HistoriPenyusutan{
 				KodeAset:                asset.KodeAset,
 				NamaAset:                asset.NamaAset,
-			Periode:                 assetData.Periode,
-			TanggalPenyusutan:       tanggalPenyusutan,
-			NilaiPenyusutan:         penyusutanBulanan,
-			AkumulasiPenyusutan:     newAkumulasi,
-			NilaiBuku:               newNilaiBuku,
-			AkunBebanPenyusutan:     asset.AkunBebanPenyusutan,
-			AkunAkumulasiPenyusutan: asset.AkunAkumulasiPenyusutan,
-			NomorTransaksi:          nomorTransaksi,
-			StatusPosting:           "Posted",
-			Keterangan:              fmt.Sprintf("Penyusutan periode %s menggunakan metode %s", assetData.Periode, asset.MetodePenyusutan),
+				Periode:                 assetData.Periode,
+				TanggalPenyusutan:       tanggalPenyusutan,
+				NilaiPenyusutan:         penyusutanBulanan,
+				AkumulasiPenyusutan:     newAkumulasi,
+				NilaiBuku:               newNilaiBuku,
+				AkunBebanPenyusutan:     asset.AkunBebanPenyusutan,
+				AkunAkumulasiPenyusutan: asset.AkunAkumulasiPenyusutan,
+				NomorTransaksi:          nomorTransaksi,
+				StatusPosting:           "Posted",
+				Keterangan:              fmt.Sprintf("Penyusutan periode %s menggunakan metode %s", assetData.Periode, asset.MetodePenyusutan),
 			}
 
 			if err := tx.Create(&histori).Error; err != nil {
@@ -790,17 +812,17 @@ func PostDepreciationToGL(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-		"message":       fmt.Sprintf("Successfully posted depreciation for %d asset periods", len(postedDepreciations)),
-		"depreciations": postedDepreciations,
-	})
-}
+			"message":       fmt.Sprintf("Successfully posted depreciation for %d asset periods", len(postedDepreciations)),
+			"depreciations": postedDepreciations,
+		})
+	}
 }
 
 // JualAsetTetap - Handle asset disposal/sale
 func JualAsetTetap(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		
+
 		var req struct {
 			TanggalPenjualan      string  `json:"tanggalPenjualan" binding:"required"`
 			HargaJual             float64 `json:"hargaJual" binding:"required"`

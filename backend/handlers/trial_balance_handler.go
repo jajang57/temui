@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 	"project-akuntansi-backend/models"
 	"strconv"
@@ -22,13 +21,57 @@ func GetTrialBalance(db *gorm.DB) gin.HandlerFunc {
 		var coas []models.MasterCOA
 		db.Preload("MasterCategoryCOA").Find(&coas)
 
+		// Aggregate GL data in one go to avoid N+1 problem
+		type GLSum struct {
+			AkunTransaksi string
+			Bulan         int
+			Debit         float64
+			Kredit        float64
+		}
+		var glSums []GLSum
+		db.Raw(`
+			SELECT akun_transaksi, EXTRACT(MONTH FROM tanggal) as bulan, SUM(debit) as debit, SUM(kredit) as kredit
+			FROM gl
+			WHERE EXTRACT(YEAR FROM tanggal) = ?
+			AND deleted_at IS NULL
+			GROUP BY akun_transaksi, bulan
+		`, tahun).Scan(&glSums)
+
+		// Saldo Awal Aggregation (before bulanAwal of that year)
+		type SaldoAwalSum struct {
+			AkunTransaksi string
+			Debit         float64
+			Kredit        float64
+		}
+		var saSums []SaldoAwalSum
+		db.Raw(`
+			SELECT akun_transaksi, SUM(debit) as debit, SUM(kredit) as kredit
+			FROM gl
+			WHERE (EXTRACT(YEAR FROM tanggal) < ? OR (EXTRACT(YEAR FROM tanggal) = ? AND EXTRACT(MONTH FROM tanggal) < ?))
+			AND deleted_at IS NULL
+			GROUP BY akun_transaksi
+		`, tahun, tahun, bulanAwal).Scan(&saSums)
+
+		// Map strings to results for fast lookup
+		glMap := make(map[string]map[int]GLSum)
+		for _, s := range glSums {
+			if glMap[s.AkunTransaksi] == nil {
+				glMap[s.AkunTransaksi] = make(map[int]GLSum)
+			}
+			glMap[s.AkunTransaksi][s.Bulan] = s
+		}
+
+		saMap := make(map[string]SaldoAwalSum)
+		for _, s := range saSums {
+			saMap[s.AkunTransaksi] = s
+		}
+
 		type TrialBalanceRow struct {
 			Kode      string  `json:"kode"`
 			Nama      string  `json:"nama"`
 			SaldoAwal float64 `json:"saldoAwal"`
 			Kategori  string  `json:"kategori"`
 			TipeAkun  string  `json:"tipeAkun"`
-			// Dynamic per bulan
 			JanDebit  float64 `json:"jan_debit"`
 			JanKredit float64 `json:"jan_kredit"`
 			FebDebit  float64 `json:"feb_debit"`
@@ -55,105 +98,56 @@ func GetTrialBalance(db *gorm.DB) gin.HandlerFunc {
 			DesKredit float64 `json:"des_kredit"`
 		}
 
-		monthMap := map[int]string{
+		monthNameMap := map[int]string{
 			1: "jan", 2: "feb", 3: "mar", 4: "apr", 5: "mei", 6: "jun",
 			7: "jul", 8: "ags", 9: "sep", 10: "okt", 11: "nov", 12: "des",
 		}
 
 		var result []TrialBalanceRow
-
 		for _, coa := range coas {
 			row := TrialBalanceRow{
-				Kode:      coa.Kode,
-				Nama:      coa.Nama,
-				SaldoAwal: coa.SaldoAwal,
-				Kategori:  coa.MasterCategoryCOA.Nama,     // jika ingin nama kategori
-				TipeAkun:  coa.MasterCategoryCOA.TipeAkun, // ambil tipe akun dari relasi kategori
+				Kode: coa.Kode, Nama: coa.Nama, SaldoAwal: coa.SaldoAwal,
+				Kategori: coa.MasterCategoryCOA.Nama, TipeAkun: coa.MasterCategoryCOA.TipeAkun,
 			}
 
-			// Saldo awal: debit-kredit sebelum bulanAwal
-			var totalDebit, totalKredit float64
-			rawSaldoAwal := `
-				SELECT COALESCE(SUM(debit),0) AS total_debit, COALESCE(SUM(kredit),0) AS total_kredit
-				FROM gl
-				WHERE akun_transaksi = ?
-				AND (
-					EXTRACT(YEAR FROM tanggal) < ?
-					OR (EXTRACT(YEAR FROM tanggal) = ? AND EXTRACT(MONTH FROM tanggal) < ?)
-				)
-			`
-			saldoAwalRow := struct {
-				TotalDebit  float64
-				TotalKredit float64
-			}{}
-			db.Raw(rawSaldoAwal, coa.Kode, tahun, tahun, bulanAwal).Scan(&saldoAwalRow)
-			totalDebit = saldoAwalRow.TotalDebit
-			totalKredit = saldoAwalRow.TotalKredit
+			// Add Saldo Awal from GL
+			sa := saMap[coa.Kode]
 			if coa.MasterCategoryCOA.TipeAkun == "2" || coa.MasterCategoryCOA.TipeAkun == "3" || coa.MasterCategoryCOA.TipeAkun == "4" {
-				row.SaldoAwal += (totalKredit - totalDebit)
+				row.SaldoAwal += (sa.Kredit - sa.Debit)
 			} else {
-				row.SaldoAwal += (totalDebit - totalKredit)
+				row.SaldoAwal += (sa.Debit - sa.Kredit)
 			}
-			//row.SaldoAwal += (totalDebit - totalKredit)
 
-			// Loop bulan sesuai filter
+			// Fill months
 			for m := bulanAwal; m <= bulanAkhir; m++ {
-				var debit, kredit float64
-				raw := `
-						SELECT COALESCE(SUM(debit),0) AS debit, COALESCE(SUM(kredit),0) AS kredit
-						FROM gl
-						WHERE akun_transaksi = ? AND EXTRACT(MONTH FROM tanggal) = ? AND EXTRACT(YEAR FROM tanggal) = ?
-					`
-				r := struct {
-					Debit  float64
-					Kredit float64
-				}{}
-				db.Raw(raw, coa.Kode, m, tahun).Scan(&r)
-				debit = r.Debit
-				kredit = r.Kredit
-
-				fmt.Printf("RAW QUERY: akun_transaksi=%s, bulan=%d, tahun=%d, Debit=%.2f, Kredit=%.2f\n", coa.Kode, m, tahun, debit, kredit)
-
-				switch monthMap[m] {
+				sum := glMap[coa.Kode][m]
+				switch monthNameMap[m] {
 				case "jan":
-					row.JanDebit = debit
-					row.JanKredit = kredit
+					row.JanDebit, row.JanKredit = sum.Debit, sum.Kredit
 				case "feb":
-					row.FebDebit = debit
-					row.FebKredit = kredit
+					row.FebDebit, row.FebKredit = sum.Debit, sum.Kredit
 				case "mar":
-					row.MarDebit = debit
-					row.MarKredit = kredit
+					row.MarDebit, row.MarKredit = sum.Debit, sum.Kredit
 				case "apr":
-					row.AprDebit = debit
-					row.AprKredit = kredit
+					row.AprDebit, row.AprKredit = sum.Debit, sum.Kredit
 				case "mei":
-					row.MeiDebit = debit
-					row.MeiKredit = kredit
+					row.MeiDebit, row.MeiKredit = sum.Debit, sum.Kredit
 				case "jun":
-					row.JunDebit = debit
-					row.JunKredit = kredit
+					row.JunDebit, row.JunKredit = sum.Debit, sum.Kredit
 				case "jul":
-					row.JulDebit = debit
-					row.JulKredit = kredit
+					row.JulDebit, row.JulKredit = sum.Debit, sum.Kredit
 				case "ags":
-					row.AgsDebit = debit
-					row.AgsKredit = kredit
+					row.AgsDebit, row.AgsKredit = sum.Debit, sum.Kredit
 				case "sep":
-					row.SepDebit = debit
-					row.SepKredit = kredit
+					row.SepDebit, row.SepKredit = sum.Debit, sum.Kredit
 				case "okt":
-					row.OktDebit = debit
-					row.OktKredit = kredit
+					row.OktDebit, row.OktKredit = sum.Debit, sum.Kredit
 				case "nov":
-					row.NovDebit = debit
-					row.NovKredit = kredit
+					row.NovDebit, row.NovKredit = sum.Debit, sum.Kredit
 				case "des":
-					row.DesDebit = debit
-					row.DesKredit = kredit
+					row.DesDebit, row.DesKredit = sum.Debit, sum.Kredit
 				}
 			}
-
 			result = append(result, row)
 		}
 

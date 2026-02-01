@@ -1,0 +1,82 @@
+
+// ConsultantProxyDB proxies requests to the target client's server (Database Version)
+func ConsultantProxyDB(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
+
+	// Get target client ID from header
+	clientID := c.GetHeader("X-Target-Client-ID")
+	if clientID == "" {
+		c.JSON(400, gin.H{"error": "Target Client ID is required in Consultant Mode"})
+		return
+	}
+
+	// Load client registry from DB
+	var targetClient models.ClientRegistry
+	if err := db.Where("id = ?", clientID).First(&targetClient).Error; err != nil {
+		c.JSON(404, gin.H{"error": "Client not found in database"})
+		return
+	}
+
+	targetURL := targetClient.URL
+	if targetURL == "" {
+		c.JSON(404, gin.H{"error": "Client URL not configured"})
+		return
+	}
+
+	// Clean URL
+	targetURL = strings.TrimSpace(targetURL)
+	targetURL = strings.TrimSuffix(targetURL, "/")
+	if strings.HasPrefix(targetURL, "localhost") || strings.HasPrefix(targetURL, "127.0.0.1") || strings.HasPrefix(targetURL, ":") {
+		 if !strings.HasPrefix(targetURL, "http") {
+			targetURL = "http://" + targetURL
+		 }
+	} else if !strings.HasPrefix(targetURL, "http") {
+		targetURL = "http://" + targetURL
+	}
+
+	// Proxy the request to the target client
+	proxyURL := targetURL + c.Request.URL.Path
+	if c.Request.URL.RawQuery != "" {
+		proxyURL += "?" + c.Request.URL.RawQuery
+	}
+
+	// Create new request
+	req, err := http.NewRequest(c.Request.Method, proxyURL, c.Request.Body)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to create proxy request"})
+		return
+	}
+
+	// Copy headers
+	for key, values := range c.Request.Header {
+		for _, value := range values {
+			req.Header.Add(key, value)
+		}
+	}
+
+	// Send request with timeout
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		c.JSON(502, gin.H{"error": "Proxy request failed (Target Server Unreachable): " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to read proxy response"})
+		return
+	}
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			c.Header(key, value)
+		}
+	}
+
+	// Send response
+	c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), body)
+}

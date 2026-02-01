@@ -22,4 +22,5 @@ type UserThemeSetting struct {
 	FieldColor        string `json:"fieldColor"` // baru
 	AppHeaderColor    string `json:"appHeaderColor"`
 	HeaderIconBgColor string `json:"headerIconBgColor"`
+	PgBinPath         string `json:"pgBinPath" gorm:"type:text"`
 }

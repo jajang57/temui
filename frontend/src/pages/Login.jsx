@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { AppContext } from "../context/AppContext";
 
 export default function Login() {
-  const [form, setForm] = useState({ username: "", password: "" });
+  const [form, setForm] = useState({ username: "", password: "", client_id: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [clients, setClients] = useState([]);
   const navigate = useNavigate();
   const location = useLocation();
   const { login, isAuthenticated } = useAuth();
+  const { appMode } = useContext(AppContext);
 
   // Redirect jika sudah login
   useEffect(() => {
@@ -16,6 +19,30 @@ export default function Login() {
       navigate("/dashboard", { replace: true });
     }
   }, [isAuthenticated, navigate]);
+
+  // Load clients if in Consultant Mode
+  useEffect(() => {
+    if (appMode === 'consultant') {
+      fetchClients();
+    }
+  }, [appMode]);
+
+  const fetchClients = async () => {
+    try {
+      const url = `${import.meta.env.VITE_API_URL || "/api"}/public/clients`;
+      // console.log("Fetching clients from:", url);
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        // console.log("Clients data:", data);
+        setClients(data);
+      } else {
+        console.error("Failed to fetch clients");
+      }
+    } catch (err) {
+      console.error("Error fetching clients:", err);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -36,11 +63,13 @@ export default function Login() {
       return;
     }
 
+    // client_id is now optional - empty means use Master DB (localhost)
+
     try {
       // Buat device info untuk single device validation
       const deviceInfo = `${navigator.userAgent} - ${window.screen.width}x${window.screen.height} - ${new Date().getTimezoneOffset()}`;
-      
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/login`, {
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL || "/api"}/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -56,12 +85,15 @@ export default function Login() {
       if (response.ok) {
         // Login menggunakan context
         login(data.user, data.token);
-        
+
         // Redirect ke halaman yang dituju sebelumnya atau dashboard
         const from = location.state?.from?.pathname || "/dashboard";
         navigate(from, { replace: true });
       } else {
         setError(data.error || "Login gagal!");
+        if (data.suggestion) {
+          setError(prev => prev + " " + data.suggestion);
+        }
       }
     } catch (err) {
       setError("Terjadi kesalahan koneksi ke server");
@@ -74,11 +106,35 @@ export default function Login() {
     <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Login</h1>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">Login {appMode === 'consultant' ? '(Konsultan)' : ''}</h1>
           <p className="text-gray-600">Masuk ke akun Maktabapps Anda</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {appMode === 'consultant' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Pilih Klien
+              </label>
+              <select
+                name="client_id"
+                value={form.client_id}
+                onChange={handleChange}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+              >
+                <option value="">🏠 Server Lokal (Master DB)</option>
+                {clients.map(client => (
+                  <option key={client.id} value={client.id}>
+                    🏢 {client.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Kosongkan untuk login ke Server Lokal, atau pilih klien untuk terhubung ke database mereka.
+              </p>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Username
@@ -110,7 +166,7 @@ export default function Login() {
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
+            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
               {error}
             </div>
           )}

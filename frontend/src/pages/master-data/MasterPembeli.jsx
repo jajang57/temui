@@ -199,7 +199,7 @@ export default function MasterPembeli() {
       kategoriHarga: item.kategoriHarga || 'Regular',
       status: item.status || 'Aktif',
       keterangan: item.keterangan || '',
-      mata_uang: item.mata_uang || '' 
+      mata_uang: item.mata_uang || ''
     });
     setEditingId(item.ID); // <-- GANTI DI SINI!
     setFormVisible(true);
@@ -243,7 +243,7 @@ export default function MasterPembeli() {
       kategoriHarga: 'Regular',
       status: 'Aktif',
       keterangan: '',
-      keterangan: ''
+      mata_uang: ''
     });
     setEditingId(null);
     setErrors({});
@@ -319,7 +319,7 @@ export default function MasterPembeli() {
             {/* Notifikasi */}
             {notif && (
               <div className="mb-2 px-4 py-2 rounded text-sm font-semibold"
-                   style={{ background: "#e0f7fa", color: "#00796b" }}>
+                style={{ background: "#e0f7fa", color: "#00796b" }}>
                 {notif}
               </div>
             )}
@@ -333,11 +333,10 @@ export default function MasterPembeli() {
                       key={tab}
                       type="button"
                       onClick={() => setActiveTab(tab)}
-                      className={`px-4 py-2 rounded-lg font-semibold transition ${
-                        activeTab === tab
+                      className={`px-4 py-2 rounded-lg font-semibold transition ${activeTab === tab
                           ? "bg-blue-600 text-white border-2 border-blue-600"
                           : "bg-gray-200 text-gray-700 border-2 border-gray-200"
-                      }`}
+                        }`}
                       style={{
                         fontFamily: theme.fontFamily,
                         boxShadow: "none",
@@ -374,7 +373,7 @@ export default function MasterPembeli() {
                         />
                         {errors.kode && <p className="text-red-500 text-xs mt-1">{errors.kode}</p>}
                       </div>
-                      
+
                       <div className="md:col-span-2">
                         <label className="block text-sm font-medium mb-1" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
                           Nama Pembeli *
@@ -462,7 +461,7 @@ export default function MasterPembeli() {
                         />
                       </div>
 
-                    
+
                     </div>
                   )}
                   {activeTab === "alamat" && (
@@ -776,7 +775,7 @@ export default function MasterPembeli() {
                           <option value="VIP">VIP</option>
                         </select>
                       </div>
-                        <div>
+                      <div>
                         <label className="block text-sm font-medium mb-1" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
                           Mata Uang
                         </label>

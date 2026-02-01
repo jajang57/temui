@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { useTheme } from '../../context/ThemeContext';
+import { RemoveRedEye as ViewIcon } from '@mui/icons-material';
+import JournalPreviewModal from '../../components/JournalPreviewModal';
 
 const HitungPenyusutan = () => {
   const { theme } = useTheme();
@@ -12,13 +14,15 @@ const HitungPenyusutan = () => {
   const [tanggalAkhir, setTanggalAkhir] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState([]);
+  const [showJournalModal, setShowJournalModal] = useState(false);
+  const [journalNomorTransaksi, setJournalNomorTransaksi] = useState('');
 
   useEffect(() => {
     // Set default tanggal to current month
     const now = new Date();
     const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    
+
     setTanggalMulai(firstDay.toISOString().split('T')[0]);
     setTanggalAkhir(lastDay.toISOString().split('T')[0]);
   }, []);
@@ -58,7 +62,7 @@ const HitungPenyusutan = () => {
           .sort();
         const idx = assetPeriods.indexOf(String(periode));
         const toUncheck = assetPeriods.slice(idx);
-        console.log('DEBUG UNCHECK:', {id, periode, assetPeriods, idx, toUncheck});
+        console.log('DEBUG UNCHECK:', { id, periode, assetPeriods, idx, toUncheck });
         next = prev.filter(key => {
           const idxDash = key.indexOf('-');
           const kId = key.substring(0, idxDash);
@@ -91,7 +95,7 @@ const HitungPenyusutan = () => {
     }
 
     const selectedData = assets.filter(asset => selectedAssets.includes(`${asset.id}-${asset.periode}`));
-    
+
     const journalEntries = [];
     selectedData.forEach(asset => {
       journalEntries.push({
@@ -126,14 +130,14 @@ const HitungPenyusutan = () => {
     try {
       // Get selected asset details with periode
       const selectedData = assets.filter(asset => selectedAssets.includes(`${asset.id}-${asset.periode}`));
-      
+
       const response = await api.post('/aset-tetap/post-depreciation', {
         assets: selectedData.map(asset => ({
           id: asset.id,
           periode: asset.periode
         }))
       });
-      
+
       alert(response.data.message);
       setShowPreview(false);
       handleLoadAssets();
@@ -287,11 +291,11 @@ const HitungPenyusutan = () => {
                     selectedAssets.includes(assetKey)
                       ? false
                       : filteredAssets.some(a =>
-                          a.kodeAset === asset.kodeAset &&
-                          a.periode < asset.periode &&
-                          !a.sudahDisusutkan &&
-                          !selectedAssets.includes(`${a.id}-${a.periode}`)
-                        )
+                        a.kodeAset === asset.kodeAset &&
+                        a.periode < asset.periode &&
+                        !a.sudahDisusutkan &&
+                        !selectedAssets.includes(`${a.id}-${a.periode}`)
+                      )
                   );
                   console.log('DISABLED?', assetKey, result);
                   return (
@@ -325,8 +329,23 @@ const HitungPenyusutan = () => {
                       <td className="px-4 py-3 text-right font-semibold" style={{ color: '#3b82f6' }}>{formatCurrency(asset.penyusutanBulanan)}</td>
                       <td className="px-4 py-3 text-center text-sm" style={{ color: theme.fontColor }}>{asset.metodePenyusutan}</td>
                       <td className="px-4 py-3 text-center">
-                        <span className="px-2 py-1 rounded" style={{ backgroundColor: asset.sudahDisusutkan ? theme.buttonSimpan : theme.buttonHapus, color: '#fff', fontSize: 12 }}>
-                          {asset.sudahDisusutkan ? 'Sudah Disusutkan' : 'Belum Disusutkan'}
+                        <span className="px-2 py-1 rounded flex items-center justify-center gap-1" style={{ backgroundColor: asset.sudahDisusutkan ? theme.buttonSimpan : theme.buttonHapus, color: '#fff', fontSize: 12 }}>
+                          {asset.sudahDisusutkan ? (
+                            <>
+                              ✓ Sudah Disusutkan
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setJournalNomorTransaksi(asset.nomorTransaksi);
+                                  setShowJournalModal(true);
+                                }}
+                                className="ml-1 hover:text-blue-200 transition-colors"
+                                title="Lihat Jurnal"
+                              >
+                                <ViewIcon style={{ fontSize: 14 }} />
+                              </button>
+                            </>
+                          ) : 'Belum Disusutkan'}
                         </span>
                       </td>
                     </tr>
@@ -423,6 +442,13 @@ const HitungPenyusutan = () => {
           </div>
         </div>
       )}
+
+      <JournalPreviewModal
+        open={showJournalModal}
+        onClose={() => setShowJournalModal(false)}
+        nomorTransaksi={journalNomorTransaksi}
+        title="Jurnal Penyusutan Aset"
+      />
     </div>
   );
 };

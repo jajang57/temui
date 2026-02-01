@@ -83,23 +83,21 @@ export default function TransaksiGL() {
             };
           })
           // hanya ambil row dengan tanggal valid (bukan null)
-           .sort((a, b) => {
-        return a.nomorTransaksi.localeCompare(b.nomorTransaksi);
-      })
+          .sort((a, b) => {
+            return a.nomorTransaksi.localeCompare(b.nomorTransaksi);
+          })
           .filter(row => row.tanggal);
-          
-            setRows(mapped);
+
+        setRows(mapped);
 
       })
-     
-      .catch(() => {});
+
+      .catch(() => { });
   }, []);
 
   // Value options untuk filter dropdown
   const tanggalOptions = useMemo(() => [...new Set(rows.map(row => row.tanggal || ""))].filter(Boolean), [rows]);
   const akunTransaksiOptions = useMemo(() => [...new Set(rows.map(row => row.akunTransaksi || ""))].filter(Boolean), [rows]);
-  const deskripsiOptions = useMemo(() => [...new Set(rows.map(row => row.deskripsi || ""))].filter(Boolean), [rows]);
-  const nomorTransaksiOptions = useMemo(() => [...new Set(rows.map(row => row.nomorTransaksi || ""))].filter(Boolean), [rows]);
 
   // Kolom DataGrid
   const columns = [
@@ -109,7 +107,7 @@ export default function TransaksiGL() {
       headerName: "Tanggal",
       width: 120,
       type: "date",
-     
+
       renderCell: (params) => {
         if (!params || !params.value) return "-";
         let d = new Date(params.value);
@@ -144,20 +142,20 @@ export default function TransaksiGL() {
             if (!filterItem.value || (!filterItem.value[0] && !filterItem.value[1])) return null;
             const [start, end] = filterItem.value;
             // Only compare date part (YYYY-MM-DD)
-            
-            const startStr = start ?  new Date(start).toLocaleDateString('en-CA') : null;
+
+            const startStr = start ? new Date(start).toLocaleDateString('en-CA') : null;
             console.log("Filter dates:", startStr, start);
-           
+
             const endStr = end ? new Date(end).toLocaleDateString('en-CA') : null;
             // console.log("Filter dates:", startStr, endStr);
             return (params) => {
               //console.log("Checking row date:", params);
-              
+
               let d = params;
               //console.log("Row date value:", d);
               if (!(d instanceof Date)) d = new Date(d);
               if (!(d instanceof Date) || isNaN(d.getTime())) return false;
-              const rowDateStr = d.toISOString().slice(0,10);
+              const rowDateStr = d.toISOString().slice(0, 10);
               //console.log("Row date:", rowDateStr);
               if (startStr && endStr) {
                 return rowDateStr >= startStr && rowDateStr <= endStr;
@@ -223,8 +221,7 @@ export default function TransaksiGL() {
       headerName: "Deskripsi",
       width: 600,
       getCellClassName: () => "wrap-text-cell",
-      type: "singleSelect",
-      valueOptions: deskripsiOptions
+      type: "string", // Changed from singleSelect to text search
     },
     {
       field: "debit",
@@ -252,17 +249,16 @@ export default function TransaksiGL() {
       field: "nomorTransaksi",
       headerName: "Nomor Transaksi",
       width: 180,
-      type: "singleSelect",
-      valueOptions: nomorTransaksiOptions
+      type: "string", // Changed from singleSelect, preventing huge dropdown lag
     },
     { field: "projectNo", headerName: "Project No", width: 120 },
     { field: "projectName", headerName: "Project Name", width: 160 },
   ];
 
   const [columnVisibilityModel, setColumnVisibilityModel] = useState({
-  coaAkunBank: false,
-  balance: false,
-});
+    coaAkunBank: false,
+    balance: false,
+  });
 
   // Export to Excel
   const handleExportExcel = () => {
@@ -278,7 +274,7 @@ export default function TransaksiGL() {
   const handlePrint = () => {
     window.print();
   };
-  
+
 
   // Debug: log rows and columns before rendering DataGrid
   //console.log('[RENDER] rows:', rows);

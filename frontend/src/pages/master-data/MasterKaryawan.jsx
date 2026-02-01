@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
+import api from '../../utils/api';
+import { toast, Toaster } from 'react-hot-toast';
 
 // Helper function to format numbers
 const formatNumber = (value) => {
@@ -12,7 +14,7 @@ const formatNumber = (value) => {
 
 const parseNumber = (value) => {
   if (!value) return '';
-  return value.replace(/\./g, '');
+  return value.toString().replace(/\./g, '');
 };
 
 export default function MasterKaryawan() {
@@ -49,21 +51,25 @@ export default function MasterKaryawan() {
   const [errors, setErrors] = useState({});
   const itemsPerPage = 10;
 
-  // Sample data - Ganti dengan API call
   useEffect(() => {
-    const sampleData = [
-      { id: 1, nik: '3578010101900001', nama: 'Budi Santoso', tempatLahir: 'Surabaya', tanggalLahir: '1990-01-01', jenisKelamin: 'Laki-laki', statusPernikahan: 'Menikah', alamat: 'Jl. Pahlawan No. 10', kota: 'Surabaya', kodePos: '60211', noTelepon: '081234567890', email: 'budi.s@example.com', departemen: 'IT', jabatan: 'Software Engineer', tanggalMasuk: '2022-05-10', statusKaryawan: 'Aktif', gajiPokok: '10000000', tunjangan: '2000000', noRekening: '1234567890', namaBank: 'BCA', npwp: '09.254.294.3-403.000' },
-      { id: 2, nik: '3578010202920002', nama: 'Citra Lestari', tempatLahir: 'Jakarta', tanggalLahir: '1992-02-02', jenisKelamin: 'Perempuan', statusPernikahan: 'Belum Menikah', alamat: 'Jl. Merdeka No. 25', kota: 'Jakarta', kodePos: '10110', noTelepon: '081298765432', email: 'citra.l@example.com', departemen: 'Keuangan', jabatan: 'Akuntan', tanggalMasuk: '2023-01-15', statusKaryawan: 'Aktif', gajiPokok: '8000000', tunjangan: '1500000', noRekening: '0987654321', namaBank: 'Mandiri', npwp: '09.254.294.3-404.000' },
-    ];
-    setKaryawanData(sampleData);
-  }, []);
+    fetchKaryawan();
+  }, [searchTerm]);
+
+  const fetchKaryawan = async () => {
+    try {
+      const response = await api.get(`/karyawan?search=${searchTerm}`);
+      setKaryawanData(response.data.data || []);
+    } catch (error) {
+      console.error("Failed to fetch karyawan", error);
+    }
+  };
 
   const validateForm = () => {
     const newErrors = {};
     if (!formData.nik.trim()) newErrors.nik = 'NIK wajib diisi';
     if (!formData.nama.trim()) newErrors.nama = 'Nama wajib diisi';
-    if (!formData.tanggalMasuk.trim()) newErrors.tanggalMasuk = 'Tanggal masuk wajib diisi';
-    if (formData.email && !/\\S+@\\S+\\.\\S+/.test(formData.email)) newErrors.email = 'Format email tidak valid';
+    if (!formData.tanggalMasuk) newErrors.tanggalMasuk = 'Tanggal masuk wajib diisi';
+    if (formData.email && !/^\S+@\S+\.\S+$/.test(formData.email)) newErrors.email = 'Format email tidak valid';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -79,43 +85,80 @@ export default function MasterKaryawan() {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
-  
+
   const handleNumericInputChange = (e) => {
     const { name, value } = e.target;
+    // Allow empty string to clear the input
+    if (value === '') {
+      setFormData(prev => ({ ...prev, [name]: '' }));
+      return;
+    }
     const parsedValue = parseNumber(value);
     if (!isNaN(parsedValue)) {
-        setFormData(prev => ({ ...prev, [name]: parsedValue }));
+      // Limit to reasonably large number to prevent overflow/issues
+      if (parsedValue.length < 20) {
+        setFormData(prev => ({ ...prev, [name]: parseInt(parsedValue) }));
+      }
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
 
-    if (editingId) {
-      setKaryawanData(prev => 
-        prev.map(item => 
-          item.id === editingId ? { ...formData, id: editingId } : item
-        )
-      );
-      setEditingId(null);
-    } else {
-      const newId = Math.max(...karyawanData.map(p => p.id), 0) + 1;
-      setKaryawanData(prev => [...prev, { ...formData, id: newId }]);
+    try {
+      // Convert dates to ISO or proper format if needed, but backend accepts string for now if formatted correctly
+      // Ensure numeric fields are numbers
+      const payload = {
+        ...formData,
+        gajiPokok: Number(formData.gajiPokok),
+        tunjangan: Number(formData.tunjangan),
+        // Handle Dates: empty string to null or proper format
+        tanggalLahir: formData.tanggalLahir ? new Date(formData.tanggalLahir) : null,
+        tanggalMasuk: formData.tanggalMasuk ? new Date(formData.tanggalMasuk) : null,
+      }
+
+      if (editingId) {
+        await api.put(`/karyawan/${editingId}`, payload);
+        toast.success('Data karyawan berhasil diperbarui');
+      } else {
+        await api.post('/karyawan', payload);
+        toast.success('Karyawan baru berhasil ditambahkan');
+      }
+      fetchKaryawan();
+      handleCancel();
+    } catch (error) {
+      console.error(error);
+      toast.error(error.response?.data?.error || 'Gagal menyimpan data');
     }
-    
-    handleCancel();
   };
 
   const handleEdit = (item) => {
-    setFormData(item);
+    // Format dates for input type="date"
+    const formatDate = (dateString) => {
+      if (!dateString) return '';
+      return new Date(dateString).toISOString().split('T')[0];
+    };
+
+    setFormData({
+      ...item,
+      tanggalLahir: formatDate(item.tanggalLahir),
+      tanggalMasuk: formatDate(item.tanggalMasuk),
+    });
     setEditingId(item.id);
     window.scrollTo(0, 0);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (confirm('Apakah Anda yakin ingin menghapus data ini?')) {
-      setKaryawanData(prev => prev.filter(item => item.id !== id));
+      try {
+        await api.delete(`/karyawan/${id}`);
+        toast.success('Data karyawan berhasil dihapus');
+        fetchKaryawan();
+      } catch (error) {
+        console.error(error);
+        toast.error('Gagal menghapus data');
+      }
     }
   };
 
@@ -130,11 +173,7 @@ export default function MasterKaryawan() {
     setErrors({});
   };
 
-  const filteredData = karyawanData.filter(item =>
-    item.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.nik.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.jabatan.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredData = karyawanData; // Search handled by API
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -142,8 +181,9 @@ export default function MasterKaryawan() {
 
   return (
     <div className="space-y-6">
+      <Toaster position="top-right" />
       <h1 className="text-2xl font-bold text-gray-900">Master Data Karyawan</h1>
-      
+
       <Card>
         <CardHeader>
           <CardTitle>{editingId ? 'Edit Karyawan' : 'Tambah Karyawan Baru'}</CardTitle>
@@ -157,7 +197,7 @@ export default function MasterKaryawan() {
                 <TabsTrigger value="pekerjaan">Info Pekerjaan</TabsTrigger>
                 <TabsTrigger value="penggajian">Penggajian & Pajak</TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="pribadi" className="pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -239,7 +279,7 @@ export default function MasterKaryawan() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Status Karyawan</label>
-                     <select name="statusKaryawan" value={formData.statusKaryawan} onChange={handleInputChange} className="w-full p-2 border rounded-md">
+                    <select name="statusKaryawan" value={formData.statusKaryawan} onChange={handleInputChange} className="w-full p-2 border rounded-md">
                       <option>Aktif</option>
                       <option>Tidak Aktif</option>
                       <option>Cuti</option>
@@ -277,11 +317,9 @@ export default function MasterKaryawan() {
               <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700">
                 {editingId ? 'Update' : 'Simpan'}
               </Button>
-              {editingId && (
-                <Button type="button" variant="outline" onClick={handleCancel}>
-                  Batal
-                </Button>
-              )}
+              <Button type="button" variant="outline" onClick={handleCancel}>
+                Batal
+              </Button>
             </div>
           </form>
         </CardContent>

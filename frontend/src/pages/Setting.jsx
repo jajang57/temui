@@ -1,5 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import MasterButton from "../master_fn/MasterButton";
+import api from "../utils/api";
+import { AppContext } from "../context/AppContext";
 
 const defaultThemeDark = {
   themeMode: "dark",
@@ -22,6 +24,7 @@ const defaultThemeDark = {
   fieldColor: "#2b394d",
   appHeaderColor: "#121e32",
   headerIconBgColor: "#24395c",
+  pgBinPath: "",
 };
 
 const defaultThemeLight = {
@@ -45,6 +48,7 @@ const defaultThemeLight = {
   fieldColor: "#f3f4f6",
   appHeaderColor: "#ece9b7",
   headerIconBgColor: "#ffffff",
+  pgBinPath: "",
 };
 
 const fontOptions = [
@@ -59,16 +63,17 @@ const fontOptions = [
 const tableFontOptions = fontOptions; // gunakan fontOptions untuk tabel
 
 export default function Setting() {
+  const { appMode } = useContext(AppContext);
   const [theme, setTheme] = useState(defaultThemeDark);
+  const [backupFiles, setBackupFiles] = useState([]);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
 
   // Load setting dari backend saat komponen mount
   useEffect(() => {
     const fetchTheme = async () => {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/user-theme-setting`, {
-          credentials: "include",
-        });
-        const data = await res.json();
+        const res = await api.get('/user-theme-setting');
+        const data = res.data;
         if (data.theme) {
           setTheme((prev) => ({
             ...prev,
@@ -92,19 +97,11 @@ export default function Setting() {
 
   const handleSave = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/user-theme-setting`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(theme),
-      });
-      if (res.ok) {
-        alert("Pengaturan berhasil disimpan!");
-      } else {
-        alert("Gagal menyimpan pengaturan.");
-      }
+      await api.post('/user-theme-setting', theme);
+      alert("Pengaturan berhasil disimpan!");
     } catch (err) {
-      alert("Terjadi error saat menyimpan pengaturan.");
+      console.error(err);
+      alert("Gagal menyimpan pengaturan.");
     }
   };
 
@@ -112,6 +109,36 @@ export default function Setting() {
   const handleThemeModeChange = (e) => {
     const mode = e.target.value;
     setTheme(mode === "dark" ? defaultThemeDark : defaultThemeLight);
+  };
+
+  const handleBackup = async () => {
+    try {
+      const res = await api.post('/backup');
+      alert(`Backup berhasil: ${res.data.filename}`);
+    } catch (err) {
+      alert("Gagal backup: " + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const handleShowRestore = async () => {
+    try {
+      const res = await api.get('/backups');
+      setBackupFiles(res.data || []);
+      setShowRestoreModal(true);
+    } catch (err) {
+      alert("Gagal memuat backup: " + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const handleRestore = async (file) => {
+    if (!confirm(`Yakin ingin restore database dari: ${file.filename}?\nSemua data saat ini akan digantikan.`)) return;
+    try {
+      await api.post('/restore', { backup_file: file.path });
+      alert("✅ Restore berhasil! Silakan refresh halaman.");
+      setShowRestoreModal(false);
+    } catch (err) {
+      alert("❌ Gagal restore: " + (err.response?.data?.error || err.message));
+    }
   };
 
   // Preview bentuk button
@@ -217,52 +244,52 @@ export default function Setting() {
           <div className="font-semibold text-gray-700 mb-3" style={{ color: theme.fontColor }}>Font & Menu</div>
           <div className="flex items-center gap-3 mb-4" >
             <label
-             className="w-full sm:w-auto"
-            style={{ color: theme.fontColor }}
-          >
-            Bentuk Font
-          </label>
-          <select
-            name="fontFamily"
-            value={theme.fontFamily}
-            onChange={handleChange}
-             className="w-full sm:w-auto"
-            style={{ fontFamily: theme.fontFamily }}
-          >
-            {fontOptions.map((font) => (
-              <option key={font.value} value={font.value} style={{ fontFamily: font.value }}>
-                {font.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex items-center gap-3 mb-4">
-          <label className="w-28 font-medium text-gray-600" style={{ color: theme.fontColor }}>Warna Font</label>
-          <input
-            type="color"
-            name="fontColor"
-            value={theme.fontColor}
-            onChange={handleChange}
-            className="w-8 h-8 rounded border-2 border-gray-200 shadow"
-          />
-          <span
-            className="inline-block w-10 h-6 rounded border"
-            style={{ background: theme.fontColor, borderColor: "#e5e7eb" }}
-          />
-          <span className="ml-2 text-xs text-gray-500">{theme.fontColor}</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <label className="w-28 font-medium text-gray-600" style={{ color: theme.fontColor }}>Posisi Menu</label>
-          <select
-            name="menuPosition"
-            value={theme.menuPosition}
-            onChange={handleChange}
-            className="border rounded px-3 py-2 bg-gray-50"
-          >
-            <option value="top">Top Navbar</option>
-            <option value="side">Side Navbar</option>
-          </select>
-        </div>
+              className="w-full sm:w-auto"
+              style={{ color: theme.fontColor }}
+            >
+              Bentuk Font
+            </label>
+            <select
+              name="fontFamily"
+              value={theme.fontFamily}
+              onChange={handleChange}
+              className="w-full sm:w-auto"
+              style={{ fontFamily: theme.fontFamily }}
+            >
+              {fontOptions.map((font) => (
+                <option key={font.value} value={font.value} style={{ fontFamily: font.value }}>
+                  {font.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-3 mb-4">
+            <label className="w-28 font-medium text-gray-600" style={{ color: theme.fontColor }}>Warna Font</label>
+            <input
+              type="color"
+              name="fontColor"
+              value={theme.fontColor}
+              onChange={handleChange}
+              className="w-8 h-8 rounded border-2 border-gray-200 shadow"
+            />
+            <span
+              className="inline-block w-10 h-6 rounded border"
+              style={{ background: theme.fontColor, borderColor: "#e5e7eb" }}
+            />
+            <span className="ml-2 text-xs text-gray-500">{theme.fontColor}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="w-28 font-medium text-gray-600" style={{ color: theme.fontColor }}>Posisi Menu</label>
+            <select
+              name="menuPosition"
+              value={theme.menuPosition}
+              onChange={handleChange}
+              className="border rounded px-3 py-2 bg-gray-50"
+            >
+              <option value="top">Top Navbar</option>
+              <option value="side">Side Navbar</option>
+            </select>
+          </div>
         </div>
         {/* Card Warna Tampilan */}
         <div className="border rounded-lg p-4" style={{ background: theme.cardColor }}>
@@ -396,8 +423,47 @@ export default function Setting() {
             <span className="ml-2 text-xs text-gray-500">{theme.headerIconBgColor}</span>
           </div>
         </div>
+
       </div>
-      <div className="flex justify-end pt-6">
+
+      {/* Card Backup & Restore (Full Width Section below Grid) */}
+      <div className="mt-8 border rounded-lg p-6 bg-white shadow-sm" style={{ background: theme.cardColor, color: theme.fontColor }}>
+        <div className="flex flex-col md:flex-row gap-8 justify-between">
+          <div className="flex-1">
+            <div className="font-semibold text-xl mb-4">Database Backup & Restore</div>
+            <div className="p-4 bg-blue-50 rounded mb-4 text-blue-800 text-sm border-l-4 border-blue-400">
+              Gunakan fitur ini untuk mengamankan data Anda secara berkala. File hasil backup berformat <code className="bg-blue-100 px-1 rounded">.dump</code> akan disimpan di folder <code className="bg-blue-100 px-1 rounded">backups/</code>.
+            </div>
+
+            <div className="bg-gray-50 p-4 rounded border" style={{ background: theme.fieldColor }}>
+              <label className="block text-sm font-bold mb-2">Konfigurasi Path PostgreSQL (pg_dump)</label>
+              <input
+                type="text"
+                name="pgBinPath"
+                value={theme.pgBinPath || ""}
+                onChange={handleChange}
+                placeholder="Contoh: C:\Program Files\PostgreSQL\16\bin"
+                className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-400 outline-none"
+                style={{ background: theme.cardColor, color: theme.fontColor, borderColor: theme.dropdownColor }}
+              />
+              <p className="text-xs text-gray-500 mt-2 italic">
+                Penting: Isi jika tombol backup tidak berfungsi karena file pg_dump tidak ditemukan di sistem.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 min-w-[250px] justify-center">
+            <MasterButton type="simpan" onClick={handleBackup} className="w-full bg-purple-600 hover:bg-purple-700 py-3 shadow-lg">
+              ✨ Buat Backup Baru
+            </MasterButton>
+            <MasterButton type="simpan" onClick={handleShowRestore} className="w-full bg-green-600 hover:bg-green-700 py-3 shadow-lg">
+              📂 Lihat Daftar & Restore
+            </MasterButton>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end pt-8">
         <MasterButton
           type="simpan"
           shape={theme.buttonShape}
@@ -553,6 +619,47 @@ export default function Setting() {
           </table>
         </div>
       </div>
-    </div>
+
+      {/* Restore Modal */}
+      {
+        showRestoreModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+              <h2 className="text-xl font-bold mb-4 text-gray-800">Restore Database</h2>
+
+              {backupFiles.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">Tidak ada file backup tersedia.</p>
+              ) : (
+                <div className="space-y-2">
+                  {backupFiles.map((backup, index) => (
+                    <div key={index} className="border rounded p-4 hover:bg-gray-50 flex justify-between items-center">
+                      <div>
+                        <p className="font-semibold text-gray-800">{backup.filename}</p>
+                        <p className="text-sm text-gray-500">
+                          Size: {(backup.size / 1024).toFixed(2)} KB |
+                          Created: {new Date(backup.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleRestore(backup)}
+                        className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-bold"
+                      >
+                        RESTORE
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-6">
+                <MasterButton type="hapus" onClick={() => setShowRestoreModal(false)} className="w-full">
+                  Tutup
+                </MasterButton>
+              </div>
+            </div>
+          </div>
+        )
+      }
+    </div >
   );
 }

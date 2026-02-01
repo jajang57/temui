@@ -11,6 +11,58 @@ import {
   getCoreRowModel,
   flexRender,
 } from '@tanstack/react-table';
+import { RemoveRedEye as ViewIcon, FirstPage, LastPage, ChevronLeft, ChevronRight, ArrowUpward, ArrowDownward } from '@mui/icons-material';
+import JournalPreviewModal from '../../components/JournalPreviewModal';
+
+// Styles for React Select
+const selectStyles = (theme) => ({
+  control: (base) => ({
+    ...base,
+    background: theme.fieldColor,
+    color: theme.fontColor,
+    borderColor: theme.inputBorderColor || theme.cardBorderColor,
+    boxShadow: 'none',
+    '&:hover': {
+      borderColor: theme.inputBorderColor || theme.cardBorderColor
+    }
+  }),
+  menu: (base) => ({
+    ...base,
+    background: theme.cardColor,
+    color: theme.fontColor,
+    zIndex: 9999
+  }),
+  option: (provided, state) => ({
+    ...provided,
+    backgroundColor: state.isSelected ? theme.buttonSimpan : state.isFocused ? theme.tableAltRowColor : theme.cardColor,
+    color: state.isSelected ? '#fff' : theme.fontColor,
+    cursor: 'pointer'
+  }),
+  singleValue: (base) => ({
+    ...base,
+    color: theme.fontColor
+  }),
+  input: (base) => ({
+    ...base,
+    color: theme.fontColor
+  }),
+  placeholder: (base) => ({
+    ...base,
+    color: theme.placeholderColor || '#9ca3af'
+  })
+});
+
+
+
+// Helper style function
+function inputStyle(theme) {
+  return {
+    background: theme.fieldColor,
+    color: theme.fontColor,
+    fontFamily: theme.fontFamily,
+    borderColor: theme.dropdownColor,
+  };
+}
 
 export default function Penjualan() {
   const { theme } = useTheme();
@@ -18,6 +70,54 @@ export default function Penjualan() {
   const [editingPrice, setEditingPrice] = useState({});
   const [editingDiscPercent, setEditingDiscPercent] = useState({});
   const [editingDiscAmountItem, setEditingDiscAmountItem] = useState({});
+
+  // Styles for React Select
+  const selectStyles = (theme) => ({
+    control: (base) => ({
+      ...base,
+      background: theme.fieldColor,
+      color: theme.fontColor,
+      borderColor: theme.inputBorderColor || theme.cardBorderColor,
+      boxShadow: 'none',
+      '&:hover': {
+        borderColor: theme.inputBorderColor || theme.cardBorderColor
+      }
+    }),
+    menu: (base) => ({
+      ...base,
+      background: theme.cardColor,
+      color: theme.fontColor,
+      zIndex: 9999
+    }),
+    option: (provided, state) => ({
+      ...provided,
+      backgroundColor: state.isSelected ? theme.buttonSimpan : state.isFocused ? theme.tableAltRowColor : theme.cardColor,
+      color: state.isSelected ? '#fff' : theme.fontColor,
+      cursor: 'pointer'
+    }),
+    singleValue: (base) => ({
+      ...base,
+      color: theme.fontColor
+    }),
+    input: (base) => ({
+      ...base,
+      color: theme.fontColor
+    }),
+    placeholder: (base) => ({
+      ...base,
+      color: theme.placeholderColor || '#9ca3af'
+    })
+  });
+
+  // Helper style function
+  function inputStyle(theme) {
+    return {
+      background: theme.fieldColor,
+      color: theme.fontColor,
+      fontFamily: theme.fontFamily,
+      borderColor: theme.dropdownColor,
+    };
+  }
 
   // column resize state & handlers
   const [columnWidths, setColumnWidths] = useState({
@@ -82,18 +182,44 @@ export default function Penjualan() {
   const [modalFilter, setModalFilter] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+
+  // Sorting State
+  const [sortBy, setSortBy] = useState("id");
+  const [sortOrder, setSortOrder] = useState("desc");
+
+  // Advanced Filtering State
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+  const [filterCustomer, setFilterCustomer] = useState(null); // { value, label }
+
+  // Journal Preview State
+  const [showJournalModal, setShowJournalModal] = useState(false);
+  const [journalNomorTransaksi, setJournalNomorTransaksi] = useState("");
+
   useEffect(() => {
     fetchMasterBarangJasa();
     fetchMasterPembeli();
     fetchMasterGudang();
     fetchMasterDepartement();
-    fetchMasterPajak(); // Tambahkan ini
+    fetchMasterPajak();
     generateNomorInvoice();
-    fetchListPenjualan();
   }, []);
-useEffect(() => {
-  console.log('Isi masterPembeli:', masterPembeli);
-}, [masterPembeli]);
+
+  useEffect(() => {
+    // Debounce search or fetch when page/search/limit changes
+    const timer = setTimeout(() => {
+      fetchListPenjualan();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [page, search, limit, sortBy, sortOrder, filterStartDate, filterEndDate, filterCustomer]);
+  useEffect(() => {
+    console.log('Isi masterPembeli:', masterPembeli);
+  }, [masterPembeli]);
   // Fetch master pembeli
   const fetchMasterPembeli = async () => {
     try {
@@ -138,10 +264,10 @@ useEffect(() => {
       const response = await api.get(`/persediaan/summary`, {
         params: { gudangId }
       });
-      
+
       const stockMap = {};
       const dataArray = response.data.data || response.data; // Handle both {data: [...]} and [...]
-      
+
       if (dataArray && Array.isArray(dataArray)) {
         dataArray.forEach((item) => {
           const itemCode = item.itemCode;
@@ -167,15 +293,9 @@ useEffect(() => {
   };
 
   const generateNomorInvoice = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    
     setFormData(prev => ({
       ...prev,
-      nomorInvoice: `INV-${year}${month}${day}-${random}`
+      nomorInvoice: "AUTO"
     }));
   };
 
@@ -188,9 +308,9 @@ useEffect(() => {
   };
 
   const parseDppFormula = (s) => {
-   if (s === undefined || s === null) return 1;
-   const str = String(s).trim();
-       if (str.includes('/')) {
+    if (s === undefined || s === null) return 1;
+    const str = String(s).trim();
+    if (str.includes('/')) {
       const parts = str.split('/');
       const a = parseFloat(parts[0].replace(',', '.'));
       const b = parseFloat(parts[1].replace(',', '.'));
@@ -201,98 +321,98 @@ useEffect(() => {
     return isNaN(n) ? 1 : n;
   };
 
- const handleItemChange = (index, field, value) => {
-  const newItems = [...items];
-  // clone item
-  const item = { ...(newItems[index] || {}) };
-  // simpan raw value
-  item[field] = value;
+  const handleItemChange = (index, field, value) => {
+    const newItems = [...items];
+    // clone item
+    const item = { ...(newItems[index] || {}) };
+    // simpan raw value
+    item[field] = value;
 
-  // parse numeric fields safely (toleran terhadap string dengan koma)
-  const parseNum = v => {
-    if (v === "" || v === null || v === undefined) return 0;
-    const s = String(v).trim().replace(/,/g, '.');
-    const n = parseFloat(s);
-    return Number.isFinite(n) ? n : 0;
-  };
+    // parse numeric fields safely (toleran terhadap string dengan koma)
+    const parseNum = v => {
+      if (v === "" || v === null || v === undefined) return 0;
+      const s = String(v).trim().replace(/,/g, '.');
+      const n = parseFloat(s);
+      return Number.isFinite(n) ? n : 0;
+    };
 
-  const qty = parseNum(item.qty);
-  const price = parseNum(item.price);
-  // treat stored discPercent / discAmountItem as numbers or empty string
-  let discPercent = item.discPercent === "" ? 0 : parseNum(item.discPercent);
-  let discAmountItem = item.discAmountItem === "" ? 0 : parseNum(item.discAmountItem);
+    const qty = parseNum(item.qty);
+    const price = parseNum(item.price);
+    // treat stored discPercent / discAmountItem as numbers or empty string
+    let discPercent = item.discPercent === "" ? 0 : parseNum(item.discPercent);
+    let discAmountItem = item.discAmountItem === "" ? 0 : parseNum(item.discAmountItem);
 
-  // jika user mengubah discPercent => hitung discAmountItem (per unit)
-  if (field === 'discPercent') {
-    if (price > 0 && discPercent > 0) {
-      discAmountItem = (price * discPercent) / 100;
-    } else {
-      discAmountItem = 0;
+    // jika user mengubah discPercent => hitung discAmountItem (per unit)
+    if (field === 'discPercent') {
+      if (price > 0 && discPercent > 0) {
+        discAmountItem = (price * discPercent) / 100;
+      } else {
+        discAmountItem = 0;
+      }
     }
-  }
 
-  // jika user mengubah discAmountItem => hitung discPercent (per unit)
-  if (field === 'discAmountItem') {
-    if (price > 0 && discAmountItem > 0) {
-      discPercent = (discAmountItem / price) * 100;
-    } else {
-      discPercent = 0;
+    // jika user mengubah discAmountItem => hitung discPercent (per unit)
+    if (field === 'discAmountItem') {
+      if (price > 0 && discAmountItem > 0) {
+        discPercent = (discAmountItem / price) * 100;
+      } else {
+        discPercent = 0;
+      }
     }
-  }
 
-  // total discount amount (for line) = per-unit discount * qty
-  const discAmount = discAmountItem * qty;
-  const subtotal = qty * price;
-  const afterDisc = subtotal - discAmount;
+    // total discount amount (for line) = per-unit discount * qty
+    const discAmount = discAmountItem * qty;
+    const subtotal = qty * price;
+    const afterDisc = subtotal - discAmount;
 
-  // assign back (normalisasi ke number / empty-string as appropriate)
-  item.discPercent = discPercent;
-  item.discAmountItem = Number(Number(discAmountItem || 0).toFixed(2));
-  item.discAmount = Number(Number(discAmount || 0).toFixed(2));
+    // assign back (normalisasi ke number / empty-string as appropriate)
+    item.discPercent = discPercent;
+    item.discAmountItem = Number(Number(discAmountItem || 0).toFixed(2));
+    item.discAmount = Number(Number(discAmount || 0).toFixed(2));
 
-  // reset tax amounts then compute using masterPajak + parseDppFormula
-  item.taxamount1 = 0;
-  item.taxamount2 = 0;
-  item.taxamount3 = 0;
-  item.dppDetails = [];
+    // reset tax amounts then compute using masterPajak + parseDppFormula
+    item.taxamount1 = 0;
+    item.taxamount2 = 0;
+    item.taxamount3 = 0;
+    item.dppDetails = [];
 
-  // hitung tiap pajak dengan tanda sesuai jenis (PPN = positive, PPH/PPH Final = negative untuk total)
-  let taxSum = 0;
-  if (Array.isArray(item.tax)) {
-    item.tax.forEach(code => {
-      const pajak = masterPajak.find(p => p.code === code);
-      if (!pajak) return;
-      const dppFactor = parseDppFormula(pajak.dpp_formula);
-      const baseForTax = dppFactor * afterDisc;
-      const rate = parseNum(pajak.rate_percent) || 0;
-      const amt = (baseForTax * rate) / 100;
-      const isPph = String(pajak.tax_type || '').toLowerCase().includes('pph');
+    // hitung tiap pajak dengan tanda sesuai jenis (PPN = positive, PPH/PPH Final = negative untuk total)
+    let taxSum = 0;
+    if (Array.isArray(item.tax)) {
+      item.tax.forEach(code => {
+        const pajak = masterPajak.find(p => p.code === code);
+        if (!pajak) return;
+        const dppFactor = parseDppFormula(pajak.dpp_formula);
+        const baseForTax = dppFactor * afterDisc;
+        const rate = parseNum(pajak.rate_percent) || 0;
+        const amt = (baseForTax * rate) / 100;
+        const isPph = String(pajak.tax_type || '').toLowerCase().includes('pph');
 
-      // Simpan taxamount sebagai nilai positif untuk tampilan
-      if (pajak.order === 1) item.taxamount1 += amt;
-      if (pajak.order === 2) item.taxamount2 += amt;
-      if (pajak.order === 3) item.taxamount3 += amt;
+        // Simpan taxamount sebagai nilai positif untuk tampilan
+        if (pajak.order === 1) item.taxamount1 += amt;
+        if (pajak.order === 2) item.taxamount2 += amt;
+        if (pajak.order === 3) item.taxamount3 += amt;
 
-      // Namun kontribusi terhadap total line berkurang kalau ini PPH
-      taxSum += isPph ? -amt : amt;
+        // Namun kontribusi terhadap total line berkurang kalau ini PPH
+        taxSum += isPph ? -amt : amt;
 
-      item.dppDetails.push({
-        code: pajak.code,
-        tax_type: pajak.tax_type,
-        base: Number(Number(baseForTax || 0).toFixed(2)),
-        rate_percent: rate,
-        amount: Number(Number(amt || 0).toFixed(2)) // simpan positif
+        item.dppDetails.push({
+          code: pajak.code,
+          tax_type: pajak.tax_type,
+          base: Number(Number(baseForTax || 0).toFixed(2)),
+          rate_percent: rate,
+          amount: Number(Number(amt || 0).toFixed(2)) // simpan positif
+        });
       });
-    });
-  }
+    }
 
-  // amount = after discount + total signed taxes (PPH mengurangi amount)
-  item.amount = Number((afterDisc + taxSum).toFixed(2));
-  item.dpp = Number(Number(afterDisc || 0).toFixed(2));
-  // write back and update state
-  newItems[index] = item;
-  setItems(newItems);
-};
+    // amount = after discount + total signed taxes (PPH mengurangi amount)
+    item.amount = Number((afterDisc + taxSum).toFixed(2));
+    item.dpp = Number(Number(afterDisc || 0).toFixed(2));
+    // write back and update state
+    newItems[index] = item;
+    setItems(newItems);
+  };
 
   // Tambahkan item baru dengan id unik
   const addNewItem = () => {
@@ -327,7 +447,7 @@ useEffect(() => {
     const discAmount = (subtotal * item.discPercent) / 100 + discAmountItem;
     const afterDisc = subtotal - discAmount;
     //const taxAmount = (afterDisc * item.tax) / 100;
-    return total ;
+    return total;
   }, 0);
   const calculateTotal = () => items.reduce((total, item) => total + (item.amount || 0), 0);
 
@@ -342,9 +462,9 @@ useEffect(() => {
 
     // ✅ SIMPEL: Filter item valid tanpa deduplikasi
     const raw = Array.isArray(items) ? items : [];
-    const filtered = raw.filter(d => 
-      d && 
-      String(d.kodeItem).trim() !== "" && 
+    const filtered = raw.filter(d =>
+      d &&
+      String(d.kodeItem).trim() !== "" &&
       Number(d.qty) > 0
     );
 
@@ -385,9 +505,9 @@ useEffect(() => {
       ppn: 0,
       freight: parseFloat(formData.freight) || 0,
       stamp: parseFloat(formData.stamp) || 0,
-      total: cleanedDetails.reduce((s, it) => s + (it.amount || 0), 0) + 
-             (parseFloat(formData.freight) || 0) + 
-             (parseFloat(formData.stamp) || 0),
+      total: cleanedDetails.reduce((s, it) => s + (it.amount || 0), 0) +
+        (parseFloat(formData.freight) || 0) +
+        (parseFloat(formData.stamp) || 0),
       taxamount1: summaryTaxamount1,
       taxamount2: summaryTaxamount2,
       taxamount3: summaryTaxamount3,
@@ -399,15 +519,15 @@ useEffect(() => {
       const url = editMode ? `/penjualan/${editId}` : '/penjualan';
       const method = editMode ? 'put' : 'post';
       const response = await api[method](url, invoiceData);
-      
+
       if (response.status === 200 || response.status === 201 || response.data?.success) {
         alert(editMode ? 'Data berhasil diupdate!' : 'Data berhasil disimpan!');
-        
+
         // ✅ REFRESH UI DENGAN DATA DARI BACKEND
         if (editMode && response.data?.data) {
           const freshData = response.data.data;
           const freshDetails = Array.isArray(freshData.Details) ? freshData.Details : [];
-          
+
           console.log('Refreshing UI with fresh data:', freshDetails.length, 'items');
           setItems(freshDetails.map(detail => ({
             id: detail.ID || Date.now() + Math.random(),
@@ -447,7 +567,7 @@ useEffect(() => {
           setItems([]);
           generateNomorInvoice();
         }
-        
+
         fetchListPenjualan();
       } else {
         console.error('save failed', response);
@@ -493,58 +613,105 @@ useEffect(() => {
     }
   };
 
-  // Fetch list transaksi penjualan
+  // Fetch list transaksi penjualan (Paginated)
   const fetchListPenjualan = async () => {
     setLoadingList(true);
     try {
-      const response = await api.get('/penjualan');
-      setListPenjualan(response.data);
+      const response = await api.get('/penjualan', {
+        params: {
+          page: page,
+          limit: limit,
+          search: search,
+          sort_by: sortBy,
+          sort_order: sortOrder,
+          start_date: filterStartDate,
+          end_date: filterEndDate,
+          customer_id: filterCustomer?.value || ""
+        }
+      });
+      // Handle new response format { data, meta }
+      if (response.data.data) {
+        setListPenjualan(response.data.data);
+        setTotalPages(response.data.meta.totalPages);
+        setTotalRecords(response.data.meta.total);
+      } else if (Array.isArray(response.data)) {
+        // Fallback for old format if backend not ready
+        setListPenjualan(response.data);
+      } else {
+        setListPenjualan([]);
+      }
     } catch (error) {
+      console.error("Failed to fetch penjualan list:", error);
       setListPenjualan([]);
     }
     setLoadingList(false);
   };
 
-  // Filter transaksi berdasarkan search
-  const filteredPenjualan = listPenjualan.filter(trx =>
-    trx.nomorInvoice?.toLowerCase().includes(search.toLowerCase()) ||
-    trx.customerNama?.toLowerCase().includes(search.toLowerCase()) ||
-    String(trx.total).includes(search)
-  );
+  const handleSort = (field) => {
+    if (sortBy === field) {
+      setSortOrder(prev => prev === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(field);
+      setSortOrder("asc");
+    }
+  };
+
+  // No client-side filtering needed anymore
+  const filteredPenjualan = listPenjualan;
 
   // Fungsi untuk handle edit
   const handleEdit = async (trx) => {
-    setShowForm(true);
-    setEditMode(true);
-    setEditId(trx.id);
-    
-    const gudangId = String(trx.gudangId);
-    
-    setFormData({
-      nomorInvoice: trx.nomorInvoice,
-      tanggal: trx.tanggal?.split('T')[0] || '',
-      dueDate: trx.dueDate?.split('T')[0] || '',
-      customer: String(trx.customerId),
-      gudang: gudangId,
-      departement: String(trx.departementId),
-      nomorEfaktur: trx.nomorEfaktur || '',
-      notes: trx.notes || '',
-      freight: trx.freight || 0,
-      stamp: trx.stamp || 0,
-      // tambahkan field lain jika ada
-    });
-    
-    // Fetch stock untuk gudang ini dan tunggu selesai
     try {
-      const response = await api.get(`/persediaan/summary`, {
+      setShowForm(true);
+      setEditMode(true);
+      setEditId(trx.id);
+
+      // ✅ Reset form terlebih dahulu
+      setFormData({
+        nomorInvoice: '',
+        tanggal: new Date().toISOString().split('T')[0],
+        dueDate: '',
+        customer: '',
+        gudang: '',
+        departement: '',
+        nomorEfaktur: '',
+        notes: '',
+        freight: 0,
+        stamp: 0,
+        termPembayaran: ''
+      });
+      setItems([]);
+
+      // Fetch full data from backend to get details
+      const response = await api.get(`/penjualan/${trx.id}`);
+      const data = response.data.data || response.data; // Handle potential wrapper
+
+      const gudangId = String(data.gudangId || trx.gudangId);
+
+      setFormData({
+        nomorInvoice: data.nomorInvoice,
+        tanggal: data.tanggal?.split('T')[0] || '',
+        dueDate: data.dueDate?.split('T')[0] || '',
+        customer: String(data.customerId),
+        gudang: gudangId,
+        departement: String(data.departementId),
+        nomorEfaktur: data.nomorEfaktur || '',
+        notes: data.notes || '',
+        freight: data.freight || 0,
+        stamp: data.stamp || 0,
+        termPembayaran: String(data.termPembayaran || '')
+      });
+
+      // Fetch stock untuk gudang ini dan tunggu selesai
+      const stockResponse = await api.get(`/persediaan/summary`, {
         params: { gudangId }
       });
-      
+
       const stockMap = {};
-      const dataArray = response.data.data || response.data;
-      
-      if (dataArray && Array.isArray(dataArray)) {
-        dataArray.forEach((item) => {
+      const stockData = stockResponse.data.data || stockResponse.data;
+
+      if (stockData && Array.isArray(stockData)) {
+        stockData.forEach((item) => {
           const itemCode = item.itemCode;
           const stock = item.saldoAkhirQty;
           if (itemCode) {
@@ -552,25 +719,23 @@ useEffect(() => {
           }
         });
       }
-      
-      console.log('Stock map saat edit:', stockMap);
       setItemStocks(stockMap);
-      
-      // Set items dengan maxStock dari stock yang baru di-fetch
-      // PENTING: Saat edit, stock yang ditampilkan = stock sekarang + TOTAL qty item ini di semua baris transaksi
-      
-      // Hitung total qty per item dari transaksi ini
+
+      // Prepare details from fetched data
+      // Calculate current qty in this transaction to add back to available stock
       const qtyPerItem = {};
-      trx.details?.forEach((item) => {
+      const details = data.details || []; // Now we have details!
+
+      details.forEach((item) => {
         const code = item.kodeItem;
         qtyPerItem[code] = (qtyPerItem[code] || 0) + (parseFloat(item.qty) || 0);
       });
-      
-      setItems(trx.details?.map((item) => {
+
+      setItems(details.map((item) => {
         const currentStock = stockMap[item.kodeItem] || 0;
         const totalQtyInTransaction = qtyPerItem[item.kodeItem] || 0;
-        const totalAvailableStock = currentStock + totalQtyInTransaction; // Stock tersedia = stock sekarang + total qty item ini di transaksi
-        
+        const totalAvailableStock = currentStock + totalQtyInTransaction;
+
         return {
           id: item.id,
           kodeItem: item.kodeItem,
@@ -587,33 +752,14 @@ useEffect(() => {
           taxamount3: item.taxamount3,
           dpp: item.dpp,
           amount: item.amount,
-          gudang: String(item.gudangId || item.gudang),
-          maxStock: totalAvailableStock  // Stock total = stock sekarang + total qty item ini di transaksi
+          gudang: String(item.gudangId || data.gudangId),
+          maxStock: totalAvailableStock
         };
-      }) || []);
-      
+      }));
+
     } catch (error) {
-      console.error('Error fetching stocks on edit:', error);
-      // Tetap set items meskipun error
-      setItems(trx.details?.map((item) => ({
-        id: item.id,
-        kodeItem: item.kodeItem,
-        namaItem: item.namaItem,
-        qty: item.qty,
-        unit: item.unit,
-        price: item.price,
-        discPercent: item.discPercent,
-        discAmountItem: item.discAmountItem,
-        discAmount: item.discAmount,
-        tax: item.tax,
-        taxamount1: item.taxamount1,
-        taxamount2: item.taxamount2,
-        taxamount3: item.taxamount3,
-        dpp: item.dpp,
-        amount: item.amount,
-        gudang: String(item.gudangId || item.gudang),
-        maxStock: 0
-      })) || []);
+      console.error('Error loading data for edit:', error);
+      alert('Gagal memuat data detail transaksi!');
     }
   };
 
@@ -635,14 +781,14 @@ useEffect(() => {
   };
 
   const columns = [
-      {
-    accessorKey: 'id',
-    header: 'ID',
-    cell: info => (
-      <span className="text-xs">{info.row.original.id}</span>
-    ),
-    size: 80,
-  },
+    {
+      accessorKey: 'id',
+      header: 'ID',
+      cell: info => (
+        <span className="text-xs">{info.row.original.id}</span>
+      ),
+      size: 80,
+    },
     {
       accessorKey: 'kodeItem',
       header: 'Kode Item',
@@ -699,48 +845,48 @@ useEffect(() => {
       ),
       size: columnWidths.namaItem,
     },
-{
-  accessorKey: 'qty',
-  header: 'Qty',
-  cell: info => {
-    const row = info.row.original;
-    return (
-      <input
-        type="text"
-        name="qty"
-        value={
-          editingQty[row.id] !== undefined
-            ? editingQty[row.id]
-            : (row.qty === "" || row.qty === 0)
-              ? ""
-              : Number(row.qty).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-        }
-        onChange={e => {
-          // accept digits + decimal separator (comma or dot), normalize to dot for storage
-          let val = e.target.value.replace(/[^0-9.,]/g, "");
-          val = val.replace(/,/g, ".");
-          setEditingQty(prev => ({ ...prev, [row.id]: val }));
-        }}
-        onBlur={() => {
-          const raw = editingQty[row.id] !== undefined ? editingQty[row.id] : String(row.qty || "");
-          const num = raw === "" ? 0 : parseFloat(raw.replace(/,/g, "."));
-          // store as number with 2 decimals
-          handleItemChange(info.row.index, 'qty', Number(Number(num || 0).toFixed(2)));
-          setEditingQty(prev => {
-            const newState = { ...prev };
-            delete newState[row.id];
-            return newState;
-          });
-        }}
-        className="w-full text-xs border rounded text-right"
-        style={inputStyle(theme)}
-        inputMode="decimal"
-        autoComplete="off"
-      />
-    );
-  },
-  size: columnWidths.qty,
-},
+    {
+      accessorKey: 'qty',
+      header: 'Qty',
+      cell: info => {
+        const row = info.row.original;
+        return (
+          <input
+            type="text"
+            name="qty"
+            value={
+              editingQty[row.id] !== undefined
+                ? editingQty[row.id]
+                : (row.qty === "" || row.qty === 0)
+                  ? ""
+                  : Number(row.qty).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            }
+            onChange={e => {
+              // accept digits + decimal separator (comma or dot), normalize to dot for storage
+              let val = e.target.value.replace(/[^0-9.,]/g, "");
+              val = val.replace(/,/g, ".");
+              setEditingQty(prev => ({ ...prev, [row.id]: val }));
+            }}
+            onBlur={() => {
+              const raw = editingQty[row.id] !== undefined ? editingQty[row.id] : String(row.qty || "");
+              const num = raw === "" ? 0 : parseFloat(raw.replace(/,/g, "."));
+              // store as number with 2 decimals
+              handleItemChange(info.row.index, 'qty', Number(Number(num || 0).toFixed(2)));
+              setEditingQty(prev => {
+                const newState = { ...prev };
+                delete newState[row.id];
+                return newState;
+              });
+            }}
+            className="w-full text-xs border rounded text-right"
+            style={inputStyle(theme)}
+            inputMode="decimal"
+            autoComplete="off"
+          />
+        );
+      },
+      size: columnWidths.qty,
+    },
     {
       accessorKey: 'unit',
       header: 'Item Unit',
@@ -1078,7 +1224,7 @@ useEffect(() => {
   return (
     <div className="p-6 min-h-screen" style={{ background: theme.backgroundColor, color: theme.fontColor, fontFamily: theme.fontFamily }}>
       <h1 className="text-2xl font-bold mb-6">Penjualan - AR Invoice</h1>
-      
+
       {/* Card Form Input */}
       <Card className="p-8 rounded-xl shadow-lg mb-8" style={{ background: theme.cardColor, color: theme.fontColor, fontFamily: theme.fontFamily, borderColor: theme.cardBorderColor }}>
         {/* Header & Tombol Tampilkan Form */}
@@ -1135,7 +1281,7 @@ useEffect(() => {
           >
             {showForm ? "Sembunyikan Form" : "Tampilkan Form"}
           </Button>
-        </div>   
+        </div>
 
         {/* Form Penjualan */}
         {showForm && (
@@ -1167,32 +1313,32 @@ useEffect(() => {
               </div>
               <div>
                 <label className="block font-semibold mb-1 text-gray-700" style={{
-                    color: theme.fontColor,
-                    fontFamily: theme.fontFamily
-                  }}>Invoice No.</label>
+                  color: theme.fontColor,
+                  fontFamily: theme.fontFamily
+                }}>Invoice No.</label>
                 <Input name="nomorInvoice" value={formData.nomorInvoice} readOnly style={{ ...inputStyle(theme) }} />
               </div>
               <div>
                 <label className="block font-semibold mb-1 text-gray-700" style={{
-                    color: theme.fontColor,
-                    fontFamily: theme.fontFamily
-                  }}>Tanggal</label>
+                  color: theme.fontColor,
+                  fontFamily: theme.fontFamily
+                }}>Tanggal</label>
                 <Input type="date" name="tanggal" value={formData.tanggal} onChange={handleInputChange} style={{ ...inputStyle(theme) }} />
               </div>
               <div>
                 <label className="block font-semibold mb-1 text-gray-700" style={{
-                    color: theme.fontColor,
-                    fontFamily: theme.fontFamily
-                  }}>Due Date</label>
+                  color: theme.fontColor,
+                  fontFamily: theme.fontFamily
+                }}>Due Date</label>
                 <Input type="date" name="dueDate" value={formData.dueDate} onChange={handleInputChange} style={{ ...inputStyle(theme) }} />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               <div>
                 <label className="block font-semibold mb-1 text-gray-700" style={{
-                    color: theme.fontColor,
-                    fontFamily: theme.fontFamily
-                  }}>Gudang</label>
+                  color: theme.fontColor,
+                  fontFamily: theme.fontFamily
+                }}>Gudang</label>
                 <select
                   name="gudang"
                   value={formData.gudang}
@@ -1208,9 +1354,9 @@ useEffect(() => {
               </div>
               <div>
                 <label className="block font-semibold mb-1 text-gray-700" style={{
-                    color: theme.fontColor,
-                    fontFamily: theme.fontFamily
-                  }}>Departement</label>
+                  color: theme.fontColor,
+                  fontFamily: theme.fontFamily
+                }}>Departement</label>
                 <select
                   name="departement"
                   value={formData.departement}
@@ -1262,7 +1408,7 @@ useEffect(() => {
                       <th className="border px-2 py-1" style={{ position: 'relative', width: 120 }}>Discount Amount Item
                       </th>
                       <th className="border px-2 py-1" style={{ position: 'relative', width: 120 }}>Discount Amount
-                         <div onMouseDown={e => startResize('discAmount', e)} style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize' }} />
+                        <div onMouseDown={e => startResize('discAmount', e)} style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize' }} />
                       </th>
                       <th className="border px-2 py-1" style={{ position: 'relative', width: columnWidths.tax }}>Pajak
                         <div onMouseDown={e => startResize('tax', e)} style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize' }} />
@@ -1351,7 +1497,7 @@ useEffect(() => {
                             onBlur={() => {
                               const raw = editingQty[item.id] !== undefined ? editingQty[item.id] : String(item.qty || "");
                               let num = raw === "" ? 0 : parseFloat(String(raw).replace(/,/g, "."));
-                              
+
 
                               // Cek jenis item dari masterBarangJasa
                               const barang = masterBarangJasa.find(m => m.kode === item.kodeItem);
@@ -1516,9 +1662,9 @@ useEffect(() => {
                         </td>
 
                         <td className="border px-2 py-1 text-right" style={{ width: columnWidths.discAmount }}>
-                          { (Number(item.discAmount || 0)).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+                          {(Number(item.discAmount || 0)).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        
+
                         <td className="border px-2 py-1" style={{ width: columnWidths.tax }}>
                           <Select
                             isMulti
@@ -1554,29 +1700,29 @@ useEffect(() => {
                         </td>
 
                         <td className="border px-2 py-1 text-right" style={{ width: 90, display: 'none' }}>
-                          { (item.taxamount1 || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+                          {(item.taxamount1 || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td className="border px-2 py-1 text-right" style={{ width: 90, display: 'none' }}>
-                          { (item.taxamount2 || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+                          {(item.taxamount2 || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td className="border px-2 py-1 text-right" style={{ width: 90, display: 'none' }}>
-                          { (item.taxamount3 || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+                          {(item.taxamount3 || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         {/* DPP = qty * price - discount (use discAmountItem) */}
                         <td className="border px-2 py-1 text-right" style={{ width: columnWidths.dpp }}>
-                          { (item.dpp || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+                          {(item.dpp || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
 
                         {/* Total = DPP + taxamount1 + taxamount2 + taxamount3 */}
                         <td className="border px-2 py-1 text-right" style={{ width: columnWidths.total }}>
-                          { (item.amount || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+                          {(item.amount || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
 
                         <td className="border px-2 py-1 text-center" style={{ width: columnWidths.aksi }}>
                           <button onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))} className="px-2 py-1 rounded" style={{ background: theme.buttonHapus, color: '#fff' }}>X</button>
                         </td>
                       </tr>
-                     ))}
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -1585,8 +1731,8 @@ useEffect(() => {
             {/* Modal Popup Tambah Item */}
             {showModal && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-                <div className="rounded-lg shadow-lg p-6 min-w-[340px] max-w-[90vw] w-full" style={{background: theme.cardColor, color: theme.fontColor, fontFamily: theme.fontFamily, border: `1px solid ${theme.cardBorderColor}`}}>
-                  <h2 className="text-base font-bold mb-4" style={{color: theme.fontColor}}>Pilih Item</h2>
+                <div className="rounded-lg shadow-lg p-6 min-w-[340px] max-w-[90vw] w-full" style={{ background: theme.cardColor, color: theme.fontColor, fontFamily: theme.fontFamily, border: `1px solid ${theme.cardBorderColor}` }}>
+                  <h2 className="text-base font-bold mb-4" style={{ color: theme.fontColor }}>Pilih Item</h2>
                   <div className="mb-2 flex flex-col gap-2">
                     <input
                       type="text"
@@ -1594,19 +1740,19 @@ useEffect(() => {
                       value={modalFilter}
                       onChange={e => setModalFilter(e.target.value)}
                       className="px-2 py-1 rounded border text-sm"
-                      style={{background: theme.fieldColor, color: theme.fontColor, fontFamily: theme.fontFamily, borderColor: theme.dropdownColor, minWidth: 180}}
+                      style={{ background: theme.fieldColor, color: theme.fontColor, fontFamily: theme.fontFamily, borderColor: theme.dropdownColor, minWidth: 180 }}
                     />
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm" style={{color: theme.fontColor}}>Gudang:</span>
+                      <span className="font-semibold text-sm" style={{ color: theme.fontColor }}>Gudang:</span>
                       <select
                         value={formData.gudang}
                         onChange={e => {
                           const gudangId = e.target.value;
-                          setFormData(prev => ({...prev, gudang: gudangId}));
+                          setFormData(prev => ({ ...prev, gudang: gudangId }));
                           fetchItemStocks(gudangId); // Fetch stock saat gudang dipilih
                         }}
                         className="px-2 py-1 rounded border text-sm"
-                        style={{background: theme.fieldColor, color: theme.fontColor, fontFamily: theme.fontFamily, borderColor: theme.dropdownColor, minWidth: 120}}
+                        style={{ background: theme.fieldColor, color: theme.fontColor, fontFamily: theme.fontFamily, borderColor: theme.dropdownColor, minWidth: 120 }}
                       >
                         <option value="">Pilih Gudang</option>
                         {masterGudang.map(g => (
@@ -1616,14 +1762,14 @@ useEffect(() => {
                     </div>
                   </div>
                   <div className="overflow-x-auto mb-4">
-                    <table className="min-w-max w-full border-collapse text-xs" style={{fontFamily: theme.tableFontFamily}}>
-                      <thead style={{background: theme.tableHeaderColor, color: theme.tableFontColor}}>
+                    <table className="min-w-max w-full border-collapse text-xs" style={{ fontFamily: theme.tableFontFamily }}>
+                      <thead style={{ background: theme.tableHeaderColor, color: theme.tableFontColor }}>
                         <tr>
-                          <th className="px-1 py-1 text-center font-bold border" style={{borderColor: theme.cardBorderColor, fontSize: '0.95em'}}>#</th>
-                          <th className="px-1 py-1 text-center font-bold border" style={{borderColor: theme.cardBorderColor, fontSize: '0.95em'}}>Kode Item</th>
-                          <th className="px-1 py-1 text-center font-bold border" style={{borderColor: theme.cardBorderColor, fontSize: '0.95em'}}>Deskripsi</th>
-                          <th className="px-1 py-1 text-center font-bold border" style={{borderColor: theme.cardBorderColor, fontSize: '0.95em'}}>Gudang</th>
-                          <th className="px-1 py-1 text-center font-bold border" style={{borderColor: theme.cardBorderColor, fontSize: '0.95em'}}>Stock</th>
+                          <th className="px-1 py-1 text-center font-bold border" style={{ borderColor: theme.cardBorderColor, fontSize: '0.95em' }}>#</th>
+                          <th className="px-1 py-1 text-center font-bold border" style={{ borderColor: theme.cardBorderColor, fontSize: '0.95em' }}>Kode Item</th>
+                          <th className="px-1 py-1 text-center font-bold border" style={{ borderColor: theme.cardBorderColor, fontSize: '0.95em' }}>Deskripsi</th>
+                          <th className="px-1 py-1 text-center font-bold border" style={{ borderColor: theme.cardBorderColor, fontSize: '0.95em' }}>Gudang</th>
+                          <th className="px-1 py-1 text-center font-bold border" style={{ borderColor: theme.cardBorderColor, fontSize: '0.95em' }}>Stock</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1633,18 +1779,18 @@ useEffect(() => {
                         ).map((item, idx) => {
                           const stock = itemStocks[item.kode] || 0;
                           return (
-                            <tr key={item.id} style={{background: idx % 2 === 0 ? theme.tableBodyColor : theme.tableAltRowColor, color: theme.tableFontColor}}>
-                              <td className="px-1 py-1 text-center border" style={{borderColor: theme.cardBorderColor}}>
+                            <tr key={item.id} style={{ background: idx % 2 === 0 ? theme.tableBodyColor : theme.tableAltRowColor, color: theme.tableFontColor }}>
+                              <td className="px-1 py-1 text-center border" style={{ borderColor: theme.cardBorderColor }}>
                                 <input type="checkbox" checked={selectedModalItems.includes(item.id)} onChange={e => {
                                   setSelectedModalItems(e.target.checked
                                     ? [...selectedModalItems, item.id]
                                     : selectedModalItems.filter(id => id !== item.id));
                                 }} />
                               </td>
-                              <td className="px-1 py-1 text-center border" style={{borderColor: theme.cardBorderColor}}>{item.kode}</td>
-                              <td className="px-1 py-1 border" style={{borderColor: theme.cardBorderColor}}>{item.nama}</td>
-                              <td className="px-1 py-1 text-center border" style={{borderColor: theme.cardBorderColor}}>{masterGudang.find(g => String(g.id) === String(formData.gudang))?.nama || '-'}</td>
-                              <td className="px-1 py-1 text-center border" style={{borderColor: theme.cardBorderColor}}>{stock}</td>
+                              <td className="px-1 py-1 text-center border" style={{ borderColor: theme.cardBorderColor }}>{item.kode}</td>
+                              <td className="px-1 py-1 border" style={{ borderColor: theme.cardBorderColor }}>{item.nama}</td>
+                              <td className="px-1 py-1 text-center border" style={{ borderColor: theme.cardBorderColor }}>{masterGudang.find(g => String(g.id) === String(formData.gudang))?.nama || '-'}</td>
+                              <td className="px-1 py-1 text-center border" style={{ borderColor: theme.cardBorderColor }}>{stock}</td>
                             </tr>
                           );
                         })}
@@ -1652,30 +1798,30 @@ useEffect(() => {
                     </table>
                   </div>
                   <div className="flex justify-end gap-2 mt-4">
-                    <Button onClick={() => setShowModal(false)} style={{background: theme.buttonHapus, color: '#fff'}}>Batal</Button>
+                    <Button onClick={() => setShowModal(false)} style={{ background: theme.buttonHapus, color: '#fff' }}>Batal</Button>
                     <Button onClick={() => {
                       // Add selected items to detail
                       const selectedItems = masterBarangJasa.filter(item => selectedModalItems.includes(item.id));
                       const newDetailItems = selectedItems.map((item, idx) => ({
                         id: Date.now() + Math.random() + idx,
-                         kodeItem: item.kode,
-                         namaItem: item.nama,
-                         qty: 0,
-                         unit: item.satuan || '',
-                         price: item.hargaJual || 0,
-                         discPercent: 0,
-                         discAmountItem: 0,
-                         discAmount: 0,
-                         tax: 0,
-                         amount: 0,
-                         gudang: formData.gudang,
-                         maxStock: itemStocks[item.kode] || 0  // Simpan max stock
-                       }));
-                       setItems(prev => [...prev, ...newDetailItems]);
-                       setShowModal(false);
-                       setSelectedModalItems([]);
-                       setModalFilter("");
-                     }} style={{background: theme.buttonSimpan, color: '#fff'}}>Add</Button>
+                        kodeItem: item.kode,
+                        namaItem: item.nama,
+                        qty: 0,
+                        unit: item.satuan || '',
+                        price: item.hargaJual || 0,
+                        discPercent: 0,
+                        discAmountItem: 0,
+                        discAmount: 0,
+                        tax: 0,
+                        amount: 0,
+                        gudang: formData.gudang,
+                        maxStock: itemStocks[item.kode] || 0  // Simpan max stock
+                      }));
+                      setItems(prev => [...prev, ...newDetailItems]);
+                      setShowModal(false);
+                      setSelectedModalItems([]);
+                      setModalFilter("");
+                    }} style={{ background: theme.buttonSimpan, color: '#fff' }}>Add</Button>
                   </div>
                 </div>
               </div>
@@ -1686,7 +1832,7 @@ useEffect(() => {
               {/* Kiri: Nomor eFaktur & Notes */}
               <div className="space-y-4">
                 <div>
-                  <label className="block font-semibold mb-1 text-gray-700"style={{
+                  <label className="block font-semibold mb-1 text-gray-700" style={{
                     color: theme.fontColor,
                     fontFamily: theme.fontFamily
                   }}>Nomor eFaktur</label>
@@ -1752,7 +1898,7 @@ useEffect(() => {
                       </>
                     );
                   })()}
-               
+
                   <div className="flex justify-between items-center mb-2">
                     <span>Freight:</span>
                     <Input type="number" name="freight" value={formData.freight || 0} onChange={handleInputChange} style={{ ...inputStyle(theme), width: 80, textAlign: "right" }} />
@@ -1787,7 +1933,7 @@ useEffect(() => {
                       fontSize: 16,
                       padding: "12px 0"
                     }}
->
+                  >
                     Kosongkan Data
                   </Button>
                 </div>
@@ -1803,8 +1949,44 @@ useEffect(() => {
           Daftar Transaksi
         </h2>
 
-        {/* Filter & Search */}
-        <div className="mb-4">
+        {/* FILTER SECTION */}
+        <div className="p-4 border-b" style={{ borderColor: theme.cardBorderColor }}>
+          <div className="flex flex-col md:flex-row gap-4 mb-4">
+            <div className="flex gap-2 items-center">
+              <span className="text-sm font-semibold" style={{ color: theme.fontColor }}>Periode:</span>
+              <Input
+                type="date"
+                value={filterStartDate}
+                onChange={e => {
+                  setFilterStartDate(e.target.value);
+                  if (e.target.value && !filterEndDate) {
+                    setFilterEndDate(e.target.value);
+                  }
+                }}
+                className="w-40"
+                style={inputStyle(theme)}
+              />
+              <span style={{ color: theme.fontColor }}>s/d</span>
+              <Input
+                type="date"
+                value={filterEndDate}
+                onChange={e => setFilterEndDate(e.target.value)}
+                className="w-40"
+                style={inputStyle(theme)}
+              />
+            </div>
+            <div className="flex-1 max-w-xs">
+              <Select
+                placeholder="Filter Customer..."
+                options={(masterPembeli || []).map(p => ({ value: p.ID, label: p.nama }))}
+                value={filterCustomer}
+                onChange={setFilterCustomer}
+                isClearable
+                styles={selectStyles(theme)}
+              />
+            </div>
+          </div>
+
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex-1">
               <Input
@@ -1831,11 +2013,36 @@ useEffect(() => {
             <thead style={{ background: theme.tableHeaderColor, color: theme.tableFontColor }}>
               <tr>
                 <th className="border px-2 py-1 text-left">No.</th>
-                <th className="border px-2 py-1 text-left">Invoice No.</th>
-                <th className="border px-2 py-1 text-left">Tanggal</th>
-                <th className="border px-2 py-1 text-left">Customer</th>
-                <th className="border px-2 py-1 text-right">Total</th>
-                <th className="border px-2 py-1 text-left">Status</th>
+                <th className="border px-2 py-1 text-left cursor-pointer hover:bg-opacity-80" onClick={() => handleSort('nomorInvoice')}>
+                  <div className="flex items-center gap-1">
+                    Invoice No.
+                    {sortBy === 'nomorInvoice' && (sortOrder === 'asc' ? <ArrowUpward sx={{ fontSize: 14 }} /> : <ArrowDownward sx={{ fontSize: 14 }} />)}
+                  </div>
+                </th>
+                <th className="border px-2 py-1 text-left cursor-pointer hover:bg-opacity-80" onClick={() => handleSort('tanggal')}>
+                  <div className="flex items-center gap-1">
+                    Tanggal
+                    {sortBy === 'tanggal' && (sortOrder === 'asc' ? <ArrowUpward sx={{ fontSize: 14 }} /> : <ArrowDownward sx={{ fontSize: 14 }} />)}
+                  </div>
+                </th>
+                <th className="border px-2 py-1 text-left cursor-pointer hover:bg-opacity-80" onClick={() => handleSort('customerNama')}>
+                  <div className="flex items-center gap-1">
+                    Customer
+                    {sortBy === 'customerNama' && (sortOrder === 'asc' ? <ArrowUpward sx={{ fontSize: 14 }} /> : <ArrowDownward sx={{ fontSize: 14 }} />)}
+                  </div>
+                </th>
+                <th className="border px-2 py-1 text-right cursor-pointer hover:bg-opacity-80" onClick={() => handleSort('total')}>
+                  <div className="flex items-center justify-end gap-1">
+                    Total
+                    {sortBy === 'total' && (sortOrder === 'asc' ? <ArrowUpward sx={{ fontSize: 14 }} /> : <ArrowDownward sx={{ fontSize: 14 }} />)}
+                  </div>
+                </th>
+                <th className="border px-2 py-1 text-left cursor-pointer hover:bg-opacity-80" onClick={() => handleSort('status')}>
+                  <div className="flex items-center gap-1">
+                    Status
+                    {sortBy === 'status' && (sortOrder === 'asc' ? <ArrowUpward sx={{ fontSize: 14 }} /> : <ArrowDownward sx={{ fontSize: 14 }} />)}
+                  </div>
+                </th>
                 <th className="border px-2 py-1 text-left">Aksi</th>
               </tr>
             </thead>
@@ -1846,13 +2053,23 @@ useEffect(() => {
                   <td className="border px-2 py-1">{trx.nomorInvoice}</td>
                   <td className="border px-2 py-1">{trx.tanggal ? new Date(trx.tanggal).toLocaleDateString('id-ID') : ''}</td>
                   <td className="border px-2 py-1">
-                    {masterPembeli.find(p => String(p.ID) === String(trx.customerId))?.nama || '-'}
+                    {trx.customerNama || '-'}
                   </td>
                   <td className="border px-2 py-1 text-right">Rp {trx.total?.toLocaleString('id-ID')}</td>
                   <td className="border px-2 py-1">
                     <span className="px-2 py-1 rounded bg-green-100 text-green-700 text-xs font-semibold">{trx.status}</span>
                   </td>
                   <td className="border px-2 py-1 flex gap-2">
+                    <Button
+                      style={{ background: theme.buttonUpdate, color: "#fff", fontWeight: "bold", borderRadius: 6, fontSize: 12, padding: "2px 8px" }}
+                      onClick={() => {
+                        setJournalNomorTransaksi(trx.nomorInvoice);
+                        setShowJournalModal(true);
+                      }}
+                      title="Lihat Jurnal"
+                    >
+                      <ViewIcon sx={{ fontSize: 16 }} />
+                    </Button>
                     <Button
                       style={{ background: theme.buttonUpdate, color: "#fff", fontWeight: "bold", borderRadius: 6, fontSize: 12, padding: "2px 12px" }}
                       onClick={() => handleEdit(trx)}
@@ -1871,17 +2088,87 @@ useEffect(() => {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls */}
+        {/* Pagination Controls */}
+        <div className="flex flex-col md:flex-row justify-between items-center mt-4 gap-4">
+          {/* Rows Per Page & Showing Text */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold" style={{ color: theme.fontColor }}>Show</span>
+              <select
+                value={limit}
+                onChange={(e) => {
+                  setLimit(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="border rounded p-1 text-xs"
+                style={{ background: theme.fieldColor, color: theme.fontColor, borderColor: theme.cardBorderColor }}
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span className="text-xs font-semibold" style={{ color: theme.fontColor }}>rows per page</span>
+            </div>
+
+            <span className="text-xs" style={{ color: theme.fontColor }}>
+              Showing {(page - 1) * limit + 1} to {Math.min(page * limit, totalRecords)} of {totalRecords} records
+            </span>
+          </div>
+
+          {/* Navigation Buttons */}
+          <div className="flex gap-1">
+            <Button
+              disabled={page <= 1}
+              onClick={() => setPage(1)}
+              style={{ background: theme.buttonUpdate, color: "#fff", opacity: page <= 1 ? 0.5 : 1, minWidth: 32, padding: "4px 8px" }}
+              title="First Page"
+            >
+              <FirstPage sx={{ fontSize: 16 }} />
+            </Button>
+            <Button
+              disabled={page <= 1}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              style={{ background: theme.buttonUpdate, color: "#fff", opacity: page <= 1 ? 0.5 : 1, minWidth: 32, padding: "4px 8px" }}
+              title="Previous Page"
+            >
+              <ChevronLeft sx={{ fontSize: 16 }} />
+            </Button>
+
+            <div className="flex items-center px-4">
+              <span className="text-xs font-bold px-3 py-1 rounded" style={{ background: theme.buttonSimpan, color: "#fff" }}>
+                {page}
+              </span>
+            </div>
+
+            <Button
+              disabled={page >= totalPages}
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              style={{ background: theme.buttonUpdate, color: "#fff", opacity: page >= totalPages ? 0.5 : 1, minWidth: 32, padding: "4px 8px" }}
+              title="Next Page"
+            >
+              <ChevronRight sx={{ fontSize: 16 }} />
+            </Button>
+            <Button
+              disabled={page >= totalPages}
+              onClick={() => setPage(totalPages)}
+              style={{ background: theme.buttonUpdate, color: "#fff", opacity: page >= totalPages ? 0.5 : 1, minWidth: 32, padding: "4px 8px" }}
+              title="Last Page"
+            >
+              <LastPage sx={{ fontSize: 16 }} />
+            </Button>
+          </div>
+        </div>
       </Card>
+
+      <JournalPreviewModal
+        open={showJournalModal}
+        onClose={() => setShowJournalModal(false)}
+        nomorTransaksi={journalNomorTransaksi}
+        title="Jurnal Penjualan"
+      />
     </div>
   );
-}
-
-// Helper style function
-function inputStyle(theme) {
-  return {
-    background: theme.fieldColor,
-    color: theme.fontColor,
-    fontFamily: theme.fontFamily,
-    borderColor: theme.dropdownColor,
-  };
 }

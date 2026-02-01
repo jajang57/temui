@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from "react";
-import { Box, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, FormControl, InputLabel, Select, MenuItem, Grid } from "@mui/material";
+import { Box, Typography, Paper, FormControl, InputLabel, Select, MenuItem, Grid } from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
 import { useTheme } from "../../context/ThemeContext"; // tambahkan ini
 import api from "../../utils/api"; // Pastikan path sesuai project kamu
 
@@ -19,8 +20,12 @@ const months = [
   { name: "Desember", key: "des" },
 ];
 
-// Dummy tahun, bisa diganti sesuai kebutuhan
-const years = [2023, 2024, 2025];
+// Generate years implementation (2023 to Current Year + 1)
+const currentYear = new Date().getFullYear();
+const years = [];
+for (let y = 2023; y <= currentYear + 1; y++) {
+  years.push(y);
+}
 
 // Format angka ribuan
 function formatNumber(num) {
@@ -31,6 +36,8 @@ function formatNumber(num) {
   }
   return n.toLocaleString();
 }
+
+import ReportLayout from "../../components/ReportLayout";
 
 export default function TrialBalance() {
   const { theme } = useTheme(); // gunakan theme
@@ -54,7 +61,10 @@ export default function TrialBalance() {
         bulan_akhir: months.findIndex(m => m.key === endMonth) + 1
       }
     })
-      .then(res => setCoaData(res.data))
+      .then(res => {
+        console.log("Trial Balance Data Loaded:", res.data.length, "accounts");
+        setCoaData(res.data);
+      })
       .catch(() => setError("Gagal mengambil data Trial Balance"));
   }, [year, startMonth, endMonth]);
 
@@ -107,52 +117,8 @@ export default function TrialBalance() {
     window.removeEventListener("mouseup", handleResizeMouseUp);
   };
 
-  // Ref dan fungsi drag scroll
+  // Ref untuk drag scroll (opsional, tapi native lebih stabil)
   const tableRef = useRef(null);
-  let isDown = false;
-  let startX;
-  let scrollLeft;
-
-  const handleMouseDown = (e) => {
-    isDown = true;
-    startX = e.pageX - tableRef.current.offsetLeft;
-    scrollLeft = tableRef.current.scrollLeft;
-    tableRef.current.classList.add("dragging");
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-  };
-
-  const handleMouseMove = (e) => {
-    if (!isDown) return;
-    const x = e.pageX - tableRef.current.offsetLeft;
-    const walk = (x - startX);
-    tableRef.current.scrollLeft = scrollLeft - walk;
-  };
-
-  const handleMouseUp = () => {
-    isDown = false;
-    tableRef.current.classList.remove("dragging");
-    window.removeEventListener("mousemove", handleMouseMove);
-    window.removeEventListener("mouseup", handleMouseUp);
-  };
-
-  // Sticky style untuk kolom 1 saja
-  const stickyCell1 = {
-    position: "sticky",
-    left: 0,
-    background: "#fff",
-    zIndex: 10,
-    borderRight: "2px solid #1976d2",
-    minWidth: colWidths.akun,
-    width: colWidths.akun,
-    maxWidth: colWidths.akun,
-    boxShadow: "2px 0 8px -4px #1976d2"
-  };
-  const stickyCell1Body = {
-    ...stickyCell1,
-    zIndex: 9,
-    background: "#fff"
-  };
 
   // Sort data  > kode
   const sortedCoa = [...coaData].sort((a, b) => {
@@ -160,336 +126,222 @@ export default function TrialBalance() {
   });
 
   return (
-    <Box sx={{
-      p: { xs: 1, md: 3 },
-      width: "100%",
-      overflowX: "auto",
-      background: theme.backgroundColor, // gunakan warna background dari theme
-      color: theme.fontColor,
-      fontFamily: theme.fontFamily,
-    }}>
-      <Typography
-        variant="h5"
-        fontWeight="bold"
-        mb={3}
-        sx={{
-          color: theme.fontColor,
-          fontFamily: theme.fontFamily,
-        }}
-      >
-        Neraca Saldo
-      </Typography>
-      {error && <Box color="error.main" mb={2}>{error}</Box>}
-      <Grid container spacing={2} mb={2}>
-        <Grid item xs={12} md={3}>
-          <FormControl fullWidth size="small">
-            <InputLabel sx={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>Tahun</InputLabel>
-            <Select
-              value={year}
-              label="Tahun"
-              onChange={e => setYear(e.target.value)}
-              sx={{
-                background: theme.fieldColor,
-                color: theme.fontColor,
-                fontFamily: theme.fontFamily,
-              }}
-            >
-              {years.map(y => (
-                <MenuItem key={y} value={y} sx={{ fontFamily: theme.fontFamily }}>{y}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <FormControl fullWidth size="small">
-            <InputLabel sx={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>Bulan Awal</InputLabel>
-            <Select
-              value={startMonth}
-              label="Bulan Awal"
-              onChange={e => setStartMonth(e.target.value)}
-              sx={{
-                background: theme.fieldColor,
-                color: theme.fontColor,
-                fontFamily: theme.fontFamily,
-              }}
-            >
-              {months.map(month => (
-                <MenuItem key={month.key} value={month.key} sx={{ fontFamily: theme.fontFamily }}>{month.name}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <FormControl fullWidth size="small">
-            <InputLabel sx={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>Bulan Akhir</InputLabel>
-            <Select
-              value={endMonth}
-              label="Bulan Akhir"
-              onChange={e => setEndMonth(e.target.value)}
-              sx={{
-                background: theme.fieldColor,
-                color: theme.fontColor,
-                fontFamily: theme.fontFamily,
-              }}
-            >
-              {months.map((month, idx) => (
-                <MenuItem
-                  key={month.key}
-                  value={month.key}
-                  disabled={months.findIndex(m => m.key === month.key) < startIdx}
-                  sx={{ fontFamily: theme.fontFamily }}
-                >
-                  {month.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-      </Grid>
-      <TableContainer
-        component={Paper}
-        sx={{
-          maxWidth: "100vw",
-          maxHeight: 800,
-          overflowY: "auto",
-          overflowX: "auto",
-          cursor: "grab",
-          boxShadow: 3,
-          borderRadius: 3,
-          background: theme.cardColor, // gunakan warna card dari theme
-        }}
-        ref={tableRef}
-        onMouseDown={handleMouseDown}
-      >
-        <Table stickyHeader sx={{ minWidth: 900, fontSize: 15, fontFamily: theme.tableFontFamily }}>
-          <TableHead>
-            <TableRow>
-              <TableCell
-                rowSpan={2}
+    <ReportLayout>
+      <ReportLayout.Header>
+        <Typography
+          variant="h5"
+          fontWeight="bold"
+          mb={2}
+          sx={{
+            color: theme.fontColor,
+            fontFamily: theme.fontFamily,
+          }}
+        >
+          Neraca Saldo
+        </Typography>
+        {error && <Box color="error.main" mb={2}>{error}</Box>}
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel sx={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>Tahun</InputLabel>
+              <Select
+                value={year}
+                label="Tahun"
+                onChange={e => setYear(e.target.value)}
                 sx={{
-                  ...stickyCell1,
-                  fontWeight: "bold",
-                  fontSize: 16,
-                  background: theme.tableHeaderColor,
-                  color: theme.tableFontColor,
-                  borderRight: "2px solid #1976d2",
-                  position: "sticky",
-                  left: 0,
-                  top: 0,
-                  zIndex: 12,
-                  fontFamily: theme.tableFontFamily,
+                  background: theme.fieldColor,
+                  color: theme.fontColor,
+                  fontFamily: theme.fontFamily,
                 }}
               >
-                <Box sx={{ display: "flex", alignItems: "center", width: "100%" }}>
-                  Akun
-                  <span
-                    style={{
-                      cursor: "col-resize",
-                      padding: "0 4px",
-                      marginLeft: "auto",
-                      userSelect: "none"
-                    }}
-                    onMouseDown={e => handleResizeMouseDown("akun", e)}
-                  >
-                    &#8942;
-                  </span>
-                </Box>
-              </TableCell>
-              <TableCell
-                rowSpan={2}
-                align="right"
+                {years.map(y => (
+                  <MenuItem key={y} value={y} sx={{ fontFamily: theme.fontFamily }}>{y}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel sx={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>Bulan Awal</InputLabel>
+              <Select
+                value={startMonth}
+                label="Bulan Awal"
+                onChange={e => setStartMonth(e.target.value)}
                 sx={{
-                  fontWeight: "bold",
-                  fontSize: 16,
-                  background: theme.tableHeaderColor,
-                  color: theme.tableFontColor,
-                  minWidth: colWidths.saldo,
-                  width: colWidths.saldo,
-                  maxWidth: colWidths.saldo,
-                  position: "sticky",
-                  top: 0,
-                  zIndex: 11,
-                  fontFamily: theme.tableFontFamily,
+                  background: theme.fieldColor,
+                  color: theme.fontColor,
+                  fontFamily: theme.fontFamily,
                 }}
               >
-                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", width: "100%" }}>
-                  Saldo Awal
-                  <span
-                    style={{
-                      cursor: "col-resize",
-                      padding: "0 4px",
-                      marginLeft: "4px",
-                      userSelect: "none"
-                    }}
-                    onMouseDown={e => handleResizeMouseDown("saldo", e)}
+                {months.map(month => (
+                  <MenuItem key={month.key} value={month.key} sx={{ fontFamily: theme.fontFamily }}>{month.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel sx={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>Bulan Akhir</InputLabel>
+              <Select
+                value={endMonth}
+                label="Bulan Akhir"
+                onChange={e => setEndMonth(e.target.value)}
+                sx={{
+                  background: theme.fieldColor,
+                  color: theme.fontColor,
+                  fontFamily: theme.fontFamily,
+                }}
+              >
+                {months.map((month, idx) => (
+                  <MenuItem
+                    key={month.key}
+                    value={month.key}
+                    disabled={months.findIndex(m => m.key === month.key) < startIdx}
+                    sx={{ fontFamily: theme.fontFamily }}
                   >
-                    &#8942;
-                  </span>
-                </Box>
-              </TableCell>
-              {/* Judul bulan */}
-              {filteredMonths.map((month, idx) => (
-                <TableCell
-                  key={month.key}
-                  colSpan={4}
-                  align="center"
-                  sx={{
-                    borderRight: idx < filteredMonths.length - 1 ? "3px solid #1976d2" : undefined,
-                    fontWeight: "bold",
-                    fontSize: 16,
-                    background: theme.tableHeaderColor,
-                    color: theme.tableFontColor,
-                    position: "sticky",
-                    top: 0,
-                    zIndex: 10,
-                    fontFamily: theme.tableFontFamily,
-                  }}
-                >
-                  {month.name}
-                </TableCell>
-              ))}
-            </TableRow>
-            <TableRow>
-              {filteredMonths.map((month, idx) => (
-                ["debit", "kredit", "mutasi", "balance"].map((type, i) => (
-                  <TableCell
-                    key={month.key + "_" + type}
-                    align={type === "debit" ? "right" : "center"}
-                    sx={{
-                      borderRight: (type === "balance" && idx < filteredMonths.length - 1) ? "3px solid #1976d2" : undefined,
-                      fontWeight: "bold",
-                      fontSize: 16,
-                      background: theme.tableHeaderColor,
-                      color: theme.tableFontColor,
-                      minWidth: colWidths[`${month.key}_${type}`],
-                      width: colWidths[`${month.key}_${type}`],
-                      maxWidth: colWidths[`${month.key}_${type}`],
-                      position: "sticky",
-                      top: 56,
-                      zIndex: 11,
-                      fontFamily: theme.tableFontFamily,
-                    }}
-                  >
-                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
-                      {type.charAt(0).toUpperCase() + type.slice(1)}
-                      <span
-                        style={{
-                          cursor: "col-resize",
-                          padding: "0 4px",
-                          marginLeft: "4px",
-                          userSelect: "none"
-                        }}
-                        onMouseDown={e => handleResizeMouseDown(`${month.key}_${type}`, e)}
-                      >
-                        &#8942;
-                      </span>
-                    </Box>
-                  </TableCell>
-                ))
-              ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {sortedCoa.map(coa => {
-              const isCreditType = ["2", "3", "4"].includes(String(coa.tipeAkun));
-              return (
-                <TableRow key={coa.kode}>
-                  <TableCell
-                    sx={{
-                      ...stickyCell1Body,
-                      pl: 2,
-                      fontFamily: theme.tableFontFamily,
-                      background: theme.tableBodyColor, // tambahkan ini
-                      color: theme.tableFontColor,      // tambahkan ini
-                    }}
-                  >
-                    {coa.kode} - {coa.nama}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{
-                      fontFamily: theme.tableFontFamily,
-                      background: theme.tableBodyColor, // tambahkan ini
-                      color: theme.tableFontColor,      // tambahkan ini
-                    }}
-                  >
-                    {formatNumber(coa.saldoAwal)}
-                  </TableCell>
-                  {filteredMonths.map((month, idx) => {
-                    const debit = coa[`${month.key}_debit`] || 0;
-                    const kredit = coa[`${month.key}_kredit`] || 0;
-                    const mutasi = isCreditType ? (kredit - debit) : (debit - kredit);
-                    let totalMutasi = 0;
-                    for (let i = startIdx; i <= startIdx + idx; i++) {
-                      const mKey = months[i].key;
-                      const mDebit = coa[`${mKey}_debit`] || 0;
-                      const mKredit = coa[`${mKey}_kredit`] || 0;
-                      totalMutasi += isCreditType ? (mKredit - mDebit) : (mDebit - mKredit);
-                    }
-                    const balance = (coa.saldoAwal || 0) + totalMutasi;
+                    {month.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+      </ReportLayout.Header>
 
-                    return (
-                      <React.Fragment key={`${coa.kode}_${month.key}`}>
-                        <TableCell
-                          align="right"
-                          sx={{
-                            fontFamily: theme.tableFontFamily,
-                            background: theme.tableBodyColor, // tambahkan ini
-                            color: theme.tableFontColor,      // tambahkan ini
-                          }}
-                        >
-                          {formatNumber(debit)}
-                        </TableCell>
-                        <TableCell
-                          align="right"
-                          sx={{
-                            fontFamily: theme.tableFontFamily,
-                            background: theme.tableBodyColor, // tambahkan ini
-                            color: theme.tableFontColor,      // tambahkan ini
-                          }}
-                        >
-                          {formatNumber(kredit)}
-                        </TableCell>
-                        <TableCell
-                          align="right"
-                          sx={{
-                            fontFamily: theme.tableFontFamily,
-                            background: theme.tableBodyColor, // tambahkan ini
-                            color: theme.tableFontColor,      // tambahkan ini
-                          }}
-                        >
-                          {formatNumber(mutasi)}
-                        </TableCell>
-                        <TableCell
-                          align="right"
-                          sx={{
-                            fontFamily: theme.tableFontFamily,
-                            background: theme.tableBodyColor, // tambahkan ini
-                            color: theme.tableFontColor,      // tambahkan ini
-                          }}
-                        >
-                          {formatNumber(balance)}
-                        </TableCell>
-                      </React.Fragment>
-                    );
-                  })}
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <ReportLayout.Content>
+        <Box sx={{ height: 'calc(100vh - 280px)', width: '100%' }}>
+          <DataGrid
+            rows={sortedCoa.map((coa, idx) => ({
+              ...coa,
+              id: coa.kode || `row-${idx}`,
+              akun: `${coa.kode} - ${coa.nama}`
+            }))}
+            columns={[
+              {
+                field: 'akun',
+                headerName: 'Akun',
+                width: 250,
+                pinned: 'left'
+              },
+              {
+                field: 'saldoAwal',
+                headerName: 'Saldo Awal',
+                width: 140,
+                align: 'right',
+                headerAlign: 'right',
+                valueFormatter: (value) => formatNumber(value)
+              },
+              ...filteredMonths.flatMap(month => {
+                const isCreditType = (params) => ["2", "3", "4"].includes(String(params.row.tipeAkun));
+                return [
+                  {
+                    field: `${month.key}_debit`,
+                    headerName: 'Debit',
+                    width: 120,
+                    align: 'right',
+                    headerAlign: 'center',
+                    valueFormatter: (value) => formatNumber(value)
+                  },
+                  {
+                    field: `${month.key}_kredit`,
+                    headerName: 'Kredit',
+                    width: 120,
+                    align: 'right',
+                    headerAlign: 'center',
+                    valueFormatter: (value) => formatNumber(value)
+                  },
+                  {
+                    field: `${month.key}_mutasi`,
+                    headerName: 'Mutasi',
+                    width: 120,
+                    align: 'right',
+                    headerAlign: 'center',
+                    valueGetter: (value, row) => {
+                      const d = row[`${month.key}_debit`] || 0;
+                      const k = row[`${month.key}_kredit`] || 0;
+                      const isCredit = ["2", "3", "4"].includes(String(row.tipeAkun));
+                      return isCredit ? (k - d) : (d - k);
+                    },
+                    valueFormatter: (value) => formatNumber(value)
+                  },
+                  {
+                    field: `${month.key}_balance`,
+                    headerName: 'Balance',
+                    width: 130,
+                    align: 'right',
+                    headerAlign: 'center',
+                    valueGetter: (value, row) => {
+                      let totalMutasi = 0;
+                      const currentMonthIdx = months.findIndex(m => m.key === month.key);
+                      const isCredit = ["2", "3", "4"].includes(String(row.tipeAkun));
+
+                      for (let i = startIdx; i <= currentMonthIdx; i++) {
+                        const mKey = months[i].key;
+                        const mDebit = row[`${mKey}_debit`] || 0;
+                        const mKredit = row[`${mKey}_kredit`] || 0;
+                        totalMutasi += isCredit ? (mKredit - mDebit) : (mDebit - mKredit);
+                      }
+                      return (row.saldoAwal || 0) + totalMutasi;
+                    },
+                    valueFormatter: (value) => formatNumber(value)
+                  }
+                ];
+              })
+            ]}
+            columnGroupingModel={filteredMonths.map(month => ({
+              groupId: month.key,
+              headerName: month.name,
+              headerAlign: 'center',
+              children: [
+                { field: `${month.key}_debit` },
+                { field: `${month.key}_kredit` },
+                { field: `${month.key}_mutasi` },
+                { field: `${month.key}_balance` }
+              ]
+            }))}
+            density="compact"
+            disableRowSelectionOnClick
+            hideFooterSelectedRowCount
+            pageSizeOptions={[50, 100, 200]}
+            initialState={{
+              pagination: { paginationModel: { pageSize: 50 } },
+              pinnedColumns: {
+                left: ['akun', 'saldoAwal']
+              }
+            }}
+            sx={{
+              background: theme.cardColor,
+              color: theme.fontColor,
+              fontFamily: theme.fontFamily,
+              '& .MuiDataGrid-cell': {
+                color: theme.tableFontColor || theme.fontColor,
+                fontFamily: theme.tableFontFamily || theme.fontFamily,
+                borderRight: '1px solid rgba(224, 224, 224, 1)',
+              },
+              '& .MuiDataGrid-columnHeader': {
+                background: theme.tableHeaderColor,
+                color: theme.tableFontColor,
+                borderRight: '1px solid rgba(224, 224, 224, 1)',
+              },
+              '& .MuiDataGrid-columnHeaderTitle': {
+                fontWeight: 'bold',
+              },
+              '& .MuiDataGrid-columnGroupHeader': {
+                background: theme.tableHeaderColor,
+                color: theme.tableFontColor,
+                borderRight: '3px solid #1976d2',
+              }
+            }}
+          />
+        </Box>
+      </ReportLayout.Content>
       <style>
         {`
-          .MuiTableContainer-root.dragging {
-            cursor: grabbing !important;
-            user-select: none;
-          }
           .MuiTableCell-root {
             transition: background 0.2s;
           }
         `}
       </style>
-    </Box>
+    </ReportLayout>
   );
 }

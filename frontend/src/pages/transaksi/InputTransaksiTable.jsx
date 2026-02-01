@@ -3,6 +3,8 @@ import { useTheme } from "../../context/ThemeContext"; // tambahkan ini
 import api from "../../utils/api";
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+import { RemoveRedEye as ViewIcon } from '@mui/icons-material';
+import JournalPreviewModal from '../../components/JournalPreviewModal';
 
 function formatDateDMY(dateStr) {
   if (!dateStr) return "";
@@ -13,13 +15,13 @@ function formatDateDMY(dateStr) {
   return `${day}-${month}-${year}`;
 }
 
-export default function InputTransaksiTable({ 
-  selectedCOA, 
-  refresh, 
+export default function InputTransaksiTable({
+  selectedCOA,
+  refresh,
   shouldJumpToLatest,
   latestTransaksiData,
   onJumpCompleted,
-  onRowDoubleClick 
+  onRowDoubleClick
 }) {
   const { theme } = useTheme(); // gunakan theme
 
@@ -31,8 +33,12 @@ export default function InputTransaksiTable({
   const [projectList, setProjectList] = useState([]);
   const [localRefresh, setLocalRefresh] = useState(false);
 
+  // Journal Preview State
+  const [showJournalModal, setShowJournalModal] = useState(false);
+  const [journalNomorTransaksi, setJournalNomorTransaksi] = useState("");
+
   const itemsPerPage = 10;
-  
+
   // State changes
   useEffect(() => {
     // Data state updated
@@ -79,7 +85,7 @@ export default function InputTransaksiTable({
   // ✅ FIXED: Single useEffect untuk fetch transaksi data
   useEffect(() => {
     //
-    
+
     if (!selectedCOA) {
       //
       setData([]);
@@ -129,11 +135,11 @@ export default function InputTransaksiTable({
   // ✅ TRIGGER: Local refresh when coaList loads
   useEffect(() => {
     if (selectedCOA && coaList.length > 0 && data.length === 0) {
-      
+
       const timeoutId = setTimeout(() => {
         setLocalRefresh(prev => !prev);
       }, 200);
-      
+
       return () => clearTimeout(timeoutId);
     }
   }, [coaList.length, selectedCOA]);
@@ -141,32 +147,32 @@ export default function InputTransaksiTable({
   // ✅ HELPER: Get current query param
   const getCurrentQueryParam = () => {
     if (!selectedCOA) return null;
-    
+
     if (coaList.length > 0) {
       const coaById = coaList.find(coa => String(coa.id) === String(selectedCOA));
       return coaById ? coaById.kode : selectedCOA;
     }
-    
+
     return selectedCOA;
   };
 
   // ✅ HELPER: Get selected COA name for header
   const getSelectedCoaName = () => {
     if (!selectedCOA) return '';
-    
+
     if (coaList.length > 0) {
       const coaById = coaList.find(coa => String(coa.id) === String(selectedCOA));
       if (coaById) {
         return `${coaById.kode} - ${coaById.nama}`;
       }
     }
-    
+
     const queryParam = getCurrentQueryParam();
     if (queryParam && masterCoaList.length > 0) {
       const found = masterCoaList.find(coa => String(coa.kode) === String(queryParam));
       return found ? `${found.kode} - ${found.nama}` : queryParam;
     }
-    
+
     return selectedCOA;
   };
 
@@ -203,7 +209,7 @@ export default function InputTransaksiTable({
 
   // ✅ DATA PROCESSING
   const { filteredData, sortedFiltered } = React.useMemo(() => {
-    
+
     // Step 1: Filter data
     const filtered = data.filter(row => {
       if (!search) return true;
@@ -222,16 +228,16 @@ export default function InputTransaksiTable({
     const sorted = filtered.sort((a, b) => {
       const dateA = new Date(a.tanggal || 0);
       const dateB = new Date(b.tanggal || 0);
-      
+
       // Primary sort: by date (ascending - oldest first for chronological order)
       if (dateA.getTime() !== dateB.getTime()) {
         return dateA - dateB;
       }
-      
+
       // Secondary sort: by ID (ascending - oldest first)
       return (a.id || 0) - (b.id || 0);
     });
-    
+
     return {
       filteredData: filtered,
       sortedFiltered: sorted
@@ -241,18 +247,18 @@ export default function InputTransaksiTable({
   // ✅ ENHANCED: Smart auto-jump using the same filtered data
   useEffect(() => {
     if (shouldJumpToLatest && latestTransaksiData && data.length > 0) {
-      
+
       // ✅ Use the same sortedFiltered data (no duplicate processing)
       const targetIndex = findTargetTransaksiIndex(sortedFiltered, latestTransaksiData);
-      
+
       if (targetIndex !== -1) {
         const targetPage = Math.ceil((targetIndex + 1) / itemsPerPage);
-        
+
         // Jump to target page
         if (targetPage !== page) {
           setPage(targetPage);
         }
-        
+
         // Clear search to ensure visibility
         if (search) {
           setSearch("");
@@ -265,7 +271,7 @@ export default function InputTransaksiTable({
           setPage(totalPages);
         }
       }
-      
+
       // Notify completion
       if (onJumpCompleted) {
         setTimeout(() => {
@@ -278,21 +284,21 @@ export default function InputTransaksiTable({
   // ✅ HELPER: Find target transaksi index
   const findTargetTransaksiIndex = (sortedData, targetData) => {
     if (!targetData) return -1;
-    
+
     // Try to find by exact ID match
     if (targetData.id) {
       const index = sortedData.findIndex(item => item.id === targetData.id);
       if (index !== -1) return index;
     }
-    
+
     // Fallback: find by noTransaksi and date
     if (targetData.noTransaksi) {
-      return sortedData.findIndex(item => 
+      return sortedData.findIndex(item =>
         item.noTransaksi === targetData.noTransaksi &&
         new Date(item.tanggal).getTime() === new Date(targetData.tanggal).getTime()
       );
     }
-    
+
     return -1;
   };
 
@@ -304,13 +310,13 @@ export default function InputTransaksiTable({
   // ✅ SALDO CALCULATION: Use the memoized sorted data
   const masterSaldoAwal = React.useMemo(() => {
     if (!selectedCOA || !coaList.length) return 0;
-    
+
     const coa = coaList.find(coa => String(coa.id) === String(selectedCOA));
     if (!coa) return 0;
-    
+
     const saldoAwal = coa.saldoAwal;
     if (saldoAwal === null || saldoAwal === undefined || isNaN(saldoAwal)) return 0;
-    
+
     return Number(saldoAwal);
   }, [coaList, selectedCOA]);
 
@@ -318,7 +324,7 @@ export default function InputTransaksiTable({
     if (!sortedFiltered || !sortedFiltered.length) return masterSaldoAwal;
 
     const transaksSebelumPage = (page - 1) * itemsPerPage;
-    
+
     if (transaksSebelumPage === 0) {
       return masterSaldoAwal;
     }
@@ -338,10 +344,10 @@ export default function InputTransaksiTable({
 
   const calculateBalances = React.useMemo(() => {
     if (!paged || !paged.length) return {};
-    
+
     let running = saldoAwalPage;
     const balanceMap = {};
-    
+
     paged.forEach((row) => {
       if (row && row.id) {
         const debit = row.debit && !isNaN(row.debit) ? Number(row.debit) : 0;
@@ -350,7 +356,7 @@ export default function InputTransaksiTable({
         balanceMap[row.id] = running;
       }
     });
-    
+
     return balanceMap;
   }, [paged, saldoAwalPage]);
 
@@ -374,7 +380,7 @@ export default function InputTransaksiTable({
     const printData = [...sortedFiltered];
     let runningBalance = masterSaldoAwal;
     const balancesForPrint = {};
-    
+
     printData.forEach((row) => {
       if (row && row.id) {
         const debit = row.debit && !isNaN(row.debit) ? Number(row.debit) : 0;
@@ -468,7 +474,7 @@ export default function InputTransaksiTable({
     const exportData = [...sortedFiltered];
     let runningBalance = masterSaldoAwal;
     const balancesForExport = {};
-    
+
     exportData.forEach((row) => {
       if (row && row.id) {
         const debit = row.debit && !isNaN(row.debit) ? Number(row.debit) : 0;
@@ -484,7 +490,7 @@ export default function InputTransaksiTable({
       [
         'No',
         'Tanggal',
-        'COA Akun Bank', 
+        'COA Akun Bank',
         'Kode Akun',
         'Nama Akun',
         'Deskripsi',
@@ -658,12 +664,13 @@ export default function InputTransaksiTable({
               <th className="p-2 border">Nomor Transaksi</th>
               <th className="p-2 border">Project No</th>
               <th className="p-2 border">Project Name</th>
+              <th className="p-2 border">Jurnal</th>
             </tr>
           </thead>
           <tbody>
             {selectedCOA && (
               <tr style={{ background: theme.cardColor, color: theme.fontColor }}>
-                <td className="p-2 border text-center" colSpan={7}>
+                <td className="p-2 border text-center" colSpan={8}>
                   Saldo Awal
                 </td>
                 <td className="p-2 border text-right">
@@ -674,7 +681,7 @@ export default function InputTransaksiTable({
             )}
             {!selectedCOA ? (
               <tr>
-                <td colSpan={11} className="text-center p-8" style={{ color: theme.fontColor }}>
+                <td colSpan={12} className="text-center p-8" style={{ color: theme.fontColor }}>
                   <div className="flex flex-col items-center space-y-2">
                     <div className="text-4xl">📋</div>
                     <div className="font-medium">Pilih COA Akun Bank</div>
@@ -684,7 +691,7 @@ export default function InputTransaksiTable({
               </tr>
             ) : paged.length === 0 ? (
               <tr>
-                <td colSpan={11} className="text-center p-4" style={{ color: theme.fontColor }}>
+                <td colSpan={12} className="text-center p-4" style={{ color: theme.fontColor }}>
                   {data.length === 0 ? (
                     <>
                       <div>Tidak ada data transaksi untuk COA yang dipilih</div>
@@ -737,6 +744,20 @@ export default function InputTransaksiTable({
                     <td className="p-2 border">{row.noTransaksi}</td>
                     <td className="p-2 border">{row.projectNo}</td>
                     <td className="p-2 border">{getProjectName(row.projectNo)}</td>
+                    <td className="p-2 border text-center">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setJournalNomorTransaksi(row.noTransaksi);
+                          setShowJournalModal(true);
+                        }}
+                        className="p-1 rounded hover:bg-gray-200 transition-colors"
+                        title="Lihat Jurnal"
+                        style={{ color: theme.buttonEdit || '#4f46e5' }}
+                      >
+                        <ViewIcon sx={{ fontSize: 18 }} />
+                      </button>
+                    </td>
                   </tr>
                 );
               })
@@ -744,6 +765,13 @@ export default function InputTransaksiTable({
           </tbody>
         </table>
       </div>
+
+      <JournalPreviewModal
+        open={showJournalModal}
+        onClose={() => setShowJournalModal(false)}
+        nomorTransaksi={journalNomorTransaksi}
+        title="Jurnal Transaksi Kas/Bank"
+      />
 
       {selectedCOA && paged.length > 0 && (
         <div className="flex justify-between items-center mt-4">

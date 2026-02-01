@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import ClientSelector from "./ClientSelector";
 
 export default function TopNavbar({ onToggleSidebar }) {
   const location = useLocation();
@@ -61,13 +62,13 @@ export default function TopNavbar({ onToggleSidebar }) {
     {
       name: "Transaksi",
       dropdown: [
-       // { name: "Akun category", to: "/master-data/mastercatcoa"},
-        { name: "Akun", to: "/master-data/coa"},
+        // { name: "Akun category", to: "/master-data/mastercatcoa"},
+        { name: "Akun", to: "/master-data/coa" },
         { name: "Buku Kas", to: "/input-transaksi" },
         { name: "Pembelian", to: "/transaksi/pembelian" },
         { name: "Penjualan", to: "/transaksi/penjualan" },
         { name: "Aset" },
-        
+
       ],
     },
     {
@@ -78,7 +79,7 @@ export default function TopNavbar({ onToggleSidebar }) {
           to: "/transaksi/gl"
         },
         { name: "Jurnal Penyesuaian", to: "/transaksi/AJE" },
-        {name: "Riwayat Jurnal"},
+        { name: "Riwayat Jurnal" },
       ],
     },
     {
@@ -111,7 +112,7 @@ export default function TopNavbar({ onToggleSidebar }) {
           name: "Arsip Pajak",
           subDropdown: [
             { name: "Faktur Pajak" },
-            { name: "Bukti Potong Pajak"},
+            { name: "Bukti Potong Pajak" },
           ],
         },
       ],
@@ -125,7 +126,7 @@ export default function TopNavbar({ onToggleSidebar }) {
         { name: "Perubahan Modal" },
       ],
     },
-     {
+    {
       name: "Anggaran",
       dropdown: [
         { name: "Anggaran Tahunan / Bulanan" },
@@ -133,16 +134,15 @@ export default function TopNavbar({ onToggleSidebar }) {
         { name: "Simulasi Pajak Berdasarkan Anggaran" },
       ],
     },
-    { 
-       name: "Pengaturan",
+    {
+      name: "Pengaturan",
       dropdown: [
-        { name: "Profil Perusahaan",
+        {
+          name: "Profil Perusahaan",
           subDropdown: [
             { name: "Informasi umum" },
             { name: "Karyawan" },
-            { name: "Pemasok" },
-            { name: "Pembeli" },
-           
+
           ],
         },
         { name: "Pajak Perusahaan" },
@@ -151,14 +151,15 @@ export default function TopNavbar({ onToggleSidebar }) {
 
       ]
     },
-    { name: "Bantuan",
+    {
+      name: "Bantuan",
       dropdown: [
-        { name: "Panduan Pengguna (FAQ)"},
-        { name: "Chat Dukungan/ Tiket Masalah"},
-        { name: "Kontak CS/ Konsultan Pajak"},
+        { name: "Panduan Pengguna (FAQ)" },
+        { name: "Chat Dukungan/ Tiket Masalah" },
+        { name: "Kontak CS/ Konsultan Pajak" },
       ]
     },
-    { name: "Pemberitahuan",}
+    { name: "Pemberitahuan", }
   ];
 
   const handleLogout = () => {
@@ -193,6 +194,9 @@ export default function TopNavbar({ onToggleSidebar }) {
         <span className="font-bold text-xl tracking-tight" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
           Temui
         </span>
+        <div className="ml-4">
+          <ClientSelector isSidebar={false} />
+        </div>
       </div>
       <div className="flex items-center gap-2">
         {/* Example icons */}
@@ -226,7 +230,7 @@ export default function TopNavbar({ onToggleSidebar }) {
   );
 
   return (
-    <div>
+    <div className="no-print">
       <Header />
       <nav
         className="shadow px-4 py-2 flex items-center justify-between"
@@ -238,135 +242,130 @@ export default function TopNavbar({ onToggleSidebar }) {
       >
         <div className="flex items-center space-x-1">
           {navItems.map((item, idx) =>
-          item.dropdown ? (
-            <div
-              key={item.name}
-              className="relative"
-              ref={(el) => (dropdownRefs.current[idx] = el)}
-            >
-              <button
-                type="button"
-                className={`px-3 py-2 rounded flex items-center gap-1 hover:bg-indigo-100 transition ${
-                  item.dropdown.some((d) =>
+            item.dropdown ? (
+              <div
+                key={item.name}
+                className="relative"
+                ref={(el) => (dropdownRefs.current[idx] = el)}
+              >
+                <button
+                  type="button"
+                  className={`px-3 py-2 rounded flex items-center gap-1 hover:bg-indigo-100 transition ${item.dropdown.some((d) =>
                     d.to
                       ? location.pathname === d.to
                       : d.subDropdown?.some((s) => location.pathname === s.to)
                   )
                     ? "bg-indigo-500 text-white"
                     : "text-gray-700"
-                }`}
-                onClick={() => {
-                  setOpenDropdown(openDropdown === idx ? null : idx);
-                  setOpenSubDropdown(null); // Tutup subdropdown ketika dropdown baru dibuka
-                }}
-              >
-                <span style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
-                  {item.name}
-                </span>
-                <svg
-                  className="w-4 h-4 ml-1"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  viewBox="0 0 24 24"
+                    }`}
+                  onClick={() => {
+                    setOpenDropdown(openDropdown === idx ? null : idx);
+                    setOpenSubDropdown(null); // Tutup subdropdown ketika dropdown baru dibuka
+                  }}
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
-              </button>
-              {openDropdown === idx && (
-                <div className="absolute left-0 mt-2 w-48 bg-white rounded shadow z-10">
-                  {item.dropdown.map((drop, dropIdx) =>
-                    drop.subDropdown ? (
-                      <div
-                        key={drop.name}
-                        className="relative"
-                        onMouseEnter={() => setOpenSubDropdown(dropIdx)}
-                        onMouseLeave={() => setOpenSubDropdown(null)}
-                        ref={(el) => (subDropdownRefs.current[dropIdx] = el)}
-                      >
-                        <button
-                          type="button"
-                          className={`w-full text-left px-4 py-2 flex items-center justify-between hover:bg-indigo-100 transition ${
-                            drop.subDropdown.some((s) => location.pathname === s.to)
+                  <span style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+                    {item.name}
+                  </span>
+                  <svg
+                    className="w-4 h-4 ml-1"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </button>
+                {openDropdown === idx && (
+                  <div className="absolute left-0 mt-2 w-48 bg-white rounded shadow z-10">
+                    {item.dropdown.map((drop, dropIdx) =>
+                      drop.subDropdown ? (
+                        <div
+                          key={drop.name}
+                          className="relative"
+                          onMouseEnter={() => setOpenSubDropdown(dropIdx)}
+                          onMouseLeave={() => setOpenSubDropdown(null)}
+                          ref={(el) => (subDropdownRefs.current[dropIdx] = el)}
+                        >
+                          <button
+                            type="button"
+                            className={`w-full text-left px-4 py-2 flex items-center justify-between hover:bg-indigo-100 transition ${drop.subDropdown.some((s) => location.pathname === s.to)
                               ? "bg-indigo-500 text-white"
                               : "text-gray-700"
-                          }`}
-                        >
-                          {drop.name}
-                          <svg
-                            className="w-3 h-3 ml-2"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            viewBox="0 0 24 24"
+                              }`}
                           >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M9 5l7 7-7 7"
-                            />
-                          </svg>
-                        </button>
-                        {openSubDropdown === dropIdx && (
-                          <div className="absolute left-full top-0 mt-0 ml-1 w-48 bg-white rounded shadow z-20">
-                            {drop.subDropdown.map((sub) => (
-                              <Link
-                                key={sub.to}
-                                to={sub.to}
-                                className={`block px-4 py-2 hover:bg-indigo-100 transition ${
-                                  location.pathname === sub.to
+                            {drop.name}
+                            <svg
+                              className="w-3 h-3 ml-2"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth={2}
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M9 5l7 7-7 7"
+                              />
+                            </svg>
+                          </button>
+                          {openSubDropdown === dropIdx && (
+                            <div className="absolute left-full top-0 mt-0 ml-1 w-48 bg-white rounded shadow z-20">
+                              {drop.subDropdown.map((sub) => (
+                                <Link
+                                  key={sub.to}
+                                  to={sub.to}
+                                  className={`block px-4 py-2 hover:bg-indigo-100 transition ${location.pathname === sub.to
                                     ? "bg-indigo-500 text-white"
                                     : "text-gray-700"
-                                }`}
-                                onClick={() => {
-                                  setOpenDropdown(null);
-                                  setOpenSubDropdown(null);
-                                }}
-                              >
-                                {sub.name}
-                              </Link>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <Link
-                        key={drop.to}
-                        to={drop.to}
-                        className={`block px-4 py-2 hover:bg-indigo-100 transition ${
-                          location.pathname === drop.to
+                                    }`}
+                                  onClick={() => {
+                                    setOpenDropdown(null);
+                                    setOpenSubDropdown(null);
+                                  }}
+                                >
+                                  {sub.name}
+                                </Link>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <Link
+                          key={drop.to}
+                          to={drop.to}
+                          className={`block px-4 py-2 hover:bg-indigo-100 transition ${location.pathname === drop.to
                             ? "bg-indigo-500 text-white"
                             : "text-gray-700"
-                        }`}
-                        onClick={() => setOpenDropdown(null)}
-                      >
-                        {drop.name}
-                      </Link>
-                    )
-                  )}
-                </div>
-              )}
-            </div>
-          ) : (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={`px-3 py-2 rounded hover:bg-indigo-100 transition ${
-                location.pathname === item.to
+                            }`}
+                          onClick={() => setOpenDropdown(null)}
+                        >
+                          {drop.name}
+                        </Link>
+                      )
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={`px-3 py-2 rounded hover:bg-indigo-100 transition ${location.pathname === item.to
                   ? "bg-indigo-500 text-white"
                   : "text-gray-700"
-              }`}
-            >
-              {item.name}
-            </Link>
-          )
-        )}
+                  }`}
+              >
+                {item.name}
+              </Link>
+            )
+          )}
         </div>
-        
+
         {/* User Menu */}
         <div className="relative" ref={userMenuRef}>
           <button

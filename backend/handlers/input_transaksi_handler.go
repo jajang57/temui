@@ -80,6 +80,7 @@ func GetGenerateNoTransaksi(db *gorm.DB) gin.HandlerFunc {
 // GET all input transaksi
 func GetInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		coaAkunBank := c.Query("coaAkunBank")
 
 		// ✅ ENHANCED: Debug logging
@@ -123,6 +124,7 @@ func GetInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 // POST input transaksi
 func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		var input models.InputTransaksi
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -134,7 +136,7 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		// ✅ LOG AUDIT TRAIL
-		LogAuditTrail(db, c, "input_transaksi", input.ID, "CREATE", 
+		LogAuditTrail(db, c, "input_transaksi", input.ID, "CREATE",
 			fmt.Sprintf("Transaksi %s dibuat: Debit=%f, Kredit=%f", input.NoTransaksi, input.Debit, input.Kredit))
 
 		// --- Tambahan: Simpan ke tabel GL ---
@@ -143,6 +145,13 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 		if err := db.Preload("MasterCategoryCOA").Where("kode = ?", input.AkunTransaksi).First(&coa).Error; err == nil {
 			tipeAkun := coa.MasterCategoryCOA.TipeAkun
 			fmt.Printf("[DEBUG] PostInputTransaksi: tipeAkun untuk akun %s adalah %s\n", input.AkunTransaksi, tipeAkun)
+
+			nomorJurnal, err := GenerateNomorJurnal(db, input.Tanggal.Time)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal generate nomor jurnal"})
+				return
+			}
+
 			if tipeAkun == "1" {
 
 				var coaLawan models.MasterCOA
@@ -161,7 +170,7 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 					}
 				}
 
-				fmt.Printf("[DEBUG] PostInputTransaksi: isKasBank untuk akun %s adalah %t  %b %t \n", input.AkunTransaksi, isKasBank, input.Deskripsi, input.NoTransaksi)
+				fmt.Printf("[DEBUG] PostInputTransaksi: isKasBank untuk akun %s adalah %t  %s %s \n", input.AkunTransaksi, isKasBank, input.Deskripsi, input.NoTransaksi)
 
 				// Transaksi normal: Akun Transaksi di Debit, COA Akun Bank di Kredit
 				if input.Debit > 0 {
@@ -172,8 +181,8 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						Deskripsi:      input.Deskripsi,
 						Debit:          input.Debit,
 						Kredit:         0,
-						Balance:        input.Debit,
 						NomorTransaksi: input.NoTransaksi,
+						NomorJurnal:    nomorJurnal,
 						ProjectNo:      input.ProjectNo,
 						ProjectName:    input.ProjectName,
 					}
@@ -187,8 +196,8 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						Deskripsi:      input.Deskripsi,
 						Debit:          0,
 						Kredit:         input.Debit,
-						Balance:        -input.Debit,
 						NomorTransaksi: input.NoTransaksi,
+						NomorJurnal:    nomorJurnal,
 						ProjectNo:      input.ProjectNo,
 						ProjectName:    input.ProjectName,
 					}
@@ -205,8 +214,8 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						Deskripsi:      input.Deskripsi,
 						Debit:          input.Kredit,
 						Kredit:         0,
-						Balance:        input.Kredit,
 						NomorTransaksi: input.NoTransaksi,
+						NomorJurnal:    nomorJurnal,
 						ProjectNo:      input.ProjectNo,
 						ProjectName:    input.ProjectName,
 					}
@@ -220,8 +229,8 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						Deskripsi:      input.Deskripsi,
 						Debit:          0,
 						Kredit:         input.Kredit,
-						Balance:        -input.Kredit,
 						NomorTransaksi: input.NoTransaksi,
+						NomorJurnal:    nomorJurnal,
 						ProjectNo:      input.ProjectNo,
 						ProjectName:    input.ProjectName,
 					}
@@ -229,34 +238,36 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 					syncGLSummary(db, gl2.AkunTransaksi, gl2.Tanggal, gl2.Debit, gl2.Kredit)
 
 				}
-			} else if tipeAkun == "2" || tipeAkun == "3" || tipeAkun == "4" {
+			} else if tipeAkun == "2" || tipeAkun == "3" {
 				// Untuk Liability (2) dan Equity (3):
-				// Baris 1: Akun Transaksi di Kredit, Baris 2: COA Akun Bank di Debit
+				// Kredit > 0: Uang masuk ke Kas (Debit), bertambahnya Hutang/Modal (Kredit)
 				if input.Kredit > 0 {
+					// GL1: Kas DEBIT (uang masuk)
 					gl1 := models.GL{
 						Tanggal:        input.Tanggal.Time,
 						COAAkunBank:    input.CoaAkunBank,
-						AkunTransaksi:  input.AkunTransaksi,
+						AkunTransaksi:  input.CoaAkunBank,
 						Deskripsi:      input.Deskripsi,
 						Debit:          input.Kredit,
 						Kredit:         0,
-						Balance:        input.Kredit,
 						NomorTransaksi: input.NoTransaksi,
+						NomorJurnal:    nomorJurnal,
 						ProjectNo:      input.ProjectNo,
 						ProjectName:    input.ProjectName,
 					}
 					db.Create(&gl1)
 					syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
 
+					// GL2: Hutang/Modal KREDIT (bertambah)
 					gl2 := models.GL{
 						Tanggal:        input.Tanggal.Time,
 						COAAkunBank:    input.CoaAkunBank,
-						AkunTransaksi:  input.CoaAkunBank,
+						AkunTransaksi:  input.AkunTransaksi,
 						Deskripsi:      input.Deskripsi,
 						Debit:          0,
 						Kredit:         input.Kredit,
-						Balance:        -input.Kredit,
 						NomorTransaksi: input.NoTransaksi,
+						NomorJurnal:    nomorJurnal,
 						ProjectNo:      input.ProjectNo,
 						ProjectName:    input.ProjectName,
 					}
@@ -264,16 +275,16 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 					syncGLSummary(db, gl2.AkunTransaksi, gl2.Tanggal, gl2.Debit, gl2.Kredit)
 				}
 				if input.Debit > 0 {
-					// Akun Transaksi di Debit, COA Akun Bank di Kredit
+					// Pembayaran hutang: Hutang DEBIT, Kas KREDIT
 					gl1 := models.GL{
 						Tanggal:        input.Tanggal.Time,
 						COAAkunBank:    input.CoaAkunBank,
-						AkunTransaksi:  input.CoaAkunBank,
+						AkunTransaksi:  input.AkunTransaksi,
 						Deskripsi:      input.Deskripsi,
 						Debit:          input.Debit,
 						Kredit:         0,
-						Balance:        input.Debit,
 						NomorTransaksi: input.NoTransaksi,
+						NomorJurnal:    nomorJurnal,
 						ProjectNo:      input.ProjectNo,
 						ProjectName:    input.ProjectName,
 					}
@@ -283,12 +294,80 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 					gl2 := models.GL{
 						Tanggal:        input.Tanggal.Time,
 						COAAkunBank:    input.CoaAkunBank,
-						AkunTransaksi:  input.AkunTransaksi,
+						AkunTransaksi:  input.CoaAkunBank,
 						Deskripsi:      input.Deskripsi,
 						Debit:          0,
 						Kredit:         input.Debit,
-						Balance:        -input.Debit,
 						NomorTransaksi: input.NoTransaksi,
+						NomorJurnal:    nomorJurnal,
+						ProjectNo:      input.ProjectNo,
+						ProjectName:    input.ProjectName,
+					}
+					db.Create(&gl2)
+					syncGLSummary(db, gl2.AkunTransaksi, gl2.Tanggal, gl2.Debit, gl2.Kredit)
+				}
+			} else if tipeAkun == "4" {
+				// Untuk Pendapatan (TipeAkun 4):
+				// Kredit > 0: Uang masuk → Kas DEBIT, Pendapatan KREDIT
+				if input.Kredit > 0 {
+					// GL1: Kas DEBIT (uang masuk)
+					gl1 := models.GL{
+						Tanggal:        input.Tanggal.Time,
+						COAAkunBank:    input.CoaAkunBank,
+						AkunTransaksi:  input.CoaAkunBank,
+						Deskripsi:      input.Deskripsi,
+						Debit:          input.Kredit,
+						Kredit:         0,
+						NomorTransaksi: input.NoTransaksi,
+						NomorJurnal:    nomorJurnal,
+						ProjectNo:      input.ProjectNo,
+						ProjectName:    input.ProjectName,
+					}
+					db.Create(&gl1)
+					syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
+
+					// GL2: Pendapatan KREDIT (bertambah)
+					gl2 := models.GL{
+						Tanggal:        input.Tanggal.Time,
+						COAAkunBank:    input.CoaAkunBank,
+						AkunTransaksi:  input.AkunTransaksi,
+						Deskripsi:      input.Deskripsi,
+						Debit:          0,
+						Kredit:         input.Kredit,
+						NomorTransaksi: input.NoTransaksi,
+						NomorJurnal:    nomorJurnal,
+						ProjectNo:      input.ProjectNo,
+						ProjectName:    input.ProjectName,
+					}
+					db.Create(&gl2)
+					syncGLSummary(db, gl2.AkunTransaksi, gl2.Tanggal, gl2.Debit, gl2.Kredit)
+				}
+				// Debit > 0: Retur penjualan → Pendapatan DEBIT, Kas KREDIT
+				if input.Debit > 0 {
+					gl1 := models.GL{
+						Tanggal:        input.Tanggal.Time,
+						COAAkunBank:    input.CoaAkunBank,
+						AkunTransaksi:  input.AkunTransaksi,
+						Deskripsi:      input.Deskripsi,
+						Debit:          input.Debit,
+						Kredit:         0,
+						NomorTransaksi: input.NoTransaksi,
+						NomorJurnal:    nomorJurnal,
+						ProjectNo:      input.ProjectNo,
+						ProjectName:    input.ProjectName,
+					}
+					db.Create(&gl1)
+					syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
+
+					gl2 := models.GL{
+						Tanggal:        input.Tanggal.Time,
+						COAAkunBank:    input.CoaAkunBank,
+						AkunTransaksi:  input.CoaAkunBank,
+						Deskripsi:      input.Deskripsi,
+						Debit:          0,
+						Kredit:         input.Debit,
+						NomorTransaksi: input.NoTransaksi,
+						NomorJurnal:    nomorJurnal,
 						ProjectNo:      input.ProjectNo,
 						ProjectName:    input.ProjectName,
 					}
@@ -305,8 +384,8 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						Deskripsi:      input.Deskripsi,
 						Debit:          input.Debit,
 						Kredit:         0,
-						Balance:        input.Debit,
 						NomorTransaksi: input.NoTransaksi,
+						NomorJurnal:    nomorJurnal,
 						ProjectNo:      input.ProjectNo,
 						ProjectName:    input.ProjectName,
 					}
@@ -320,8 +399,8 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						Deskripsi:      input.Deskripsi,
 						Debit:          0,
 						Kredit:         input.Debit,
-						Balance:        -input.Debit,
 						NomorTransaksi: input.NoTransaksi,
+						NomorJurnal:    nomorJurnal,
 						ProjectNo:      input.ProjectNo,
 						ProjectName:    input.ProjectName,
 					}
@@ -336,8 +415,8 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						Deskripsi:      input.Deskripsi,
 						Debit:          input.Kredit,
 						Kredit:         0,
-						Balance:        input.Kredit,
 						NomorTransaksi: input.NoTransaksi,
+						NomorJurnal:    nomorJurnal,
 						ProjectNo:      input.ProjectNo,
 						ProjectName:    input.ProjectName,
 					}
@@ -351,8 +430,8 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						Deskripsi:      input.Deskripsi,
 						Debit:          0,
 						Kredit:         input.Kredit,
-						Balance:        -input.Kredit,
 						NomorTransaksi: input.NoTransaksi,
+						NomorJurnal:    nomorJurnal,
 						ProjectNo:      input.ProjectNo,
 						ProjectName:    input.ProjectName,
 					}
@@ -370,16 +449,17 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 // PUT (edit) input transaksi
 func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		id := c.Param("id")
 		var input models.InputTransaksi
 		if err := db.First(&input, id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Data not found"})
 			return
 		}
-		
+
 		// Store old data for audit
 		oldData := input
-		
+
 		var req models.InputTransaksi
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -400,7 +480,7 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		// ✅ LOG AUDIT TRAIL
-		LogAuditTrail(db, c, "input_transaksi", input.ID, "UPDATE", 
+		LogAuditTrail(db, c, "input_transaksi", input.ID, "UPDATE",
 			GenerateChangeDescription("UPDATE", oldData, req))
 
 		// Insert ulang ke GL sesuai data terbaru
@@ -409,6 +489,13 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 			var coa models.MasterCOA
 			if err := db.Preload("MasterCategoryCOA").Where("kode = ?", updated.AkunTransaksi).First(&coa).Error; err == nil {
 				tipeAkun := coa.MasterCategoryCOA.TipeAkun
+
+				nomorJurnal, err := GenerateNomorJurnal(db, updated.Tanggal.Time)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal generate nomor jurnal"})
+					return
+				}
+
 				// Copy logic dari PostInputTransaksi
 				if tipeAkun == "1" {
 					var coaLawan models.MasterCOA
@@ -431,8 +518,8 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 							Deskripsi:      updated.Deskripsi,
 							Debit:          updated.Debit,
 							Kredit:         0,
-							Balance:        updated.Debit,
 							NomorTransaksi: updated.NoTransaksi,
+							NomorJurnal:    nomorJurnal,
 							ProjectNo:      updated.ProjectNo,
 							ProjectName:    updated.ProjectName}
 						db.Create(&gl1)
@@ -445,8 +532,8 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 							Deskripsi:      updated.Deskripsi,
 							Debit:          0,
 							Kredit:         updated.Debit,
-							Balance:        -updated.Debit,
 							NomorTransaksi: updated.NoTransaksi,
+							NomorJurnal:    nomorJurnal,
 							ProjectNo:      updated.ProjectNo,
 							ProjectName:    updated.ProjectName}
 						db.Create(&gl2)
@@ -461,8 +548,8 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 							Deskripsi:      updated.Deskripsi,
 							Debit:          updated.Kredit,
 							Kredit:         0,
-							Balance:        updated.Kredit,
 							NomorTransaksi: updated.NoTransaksi,
+							NomorJurnal:    nomorJurnal,
 							ProjectNo:      updated.ProjectNo,
 							ProjectName:    updated.ProjectName}
 						db.Create(&gl1)
@@ -475,8 +562,8 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 							Deskripsi:      updated.Deskripsi,
 							Debit:          0,
 							Kredit:         updated.Kredit,
-							Balance:        -updated.Kredit,
 							NomorTransaksi: updated.NoTransaksi,
+							NomorJurnal:    nomorJurnal,
 							ProjectNo:      updated.ProjectNo,
 							ProjectName:    updated.ProjectName}
 						db.Create(&gl2)
@@ -492,8 +579,8 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 							Deskripsi:      updated.Deskripsi,
 							Debit:          updated.Kredit,
 							Kredit:         0,
-							Balance:        updated.Kredit,
 							NomorTransaksi: updated.NoTransaksi,
+							NomorJurnal:    nomorJurnal,
 							ProjectNo:      updated.ProjectNo,
 							ProjectName:    updated.ProjectName}
 						db.Create(&gl1)
@@ -506,8 +593,8 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 							Deskripsi:      updated.Deskripsi,
 							Debit:          0,
 							Kredit:         updated.Kredit,
-							Balance:        -updated.Kredit,
 							NomorTransaksi: updated.NoTransaksi,
+							NomorJurnal:    nomorJurnal,
 							ProjectNo:      updated.ProjectNo,
 							ProjectName:    updated.ProjectName}
 						db.Create(&gl2)
@@ -521,8 +608,8 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 							Deskripsi:      updated.Deskripsi,
 							Debit:          updated.Debit,
 							Kredit:         0,
-							Balance:        updated.Debit,
 							NomorTransaksi: updated.NoTransaksi,
+							NomorJurnal:    nomorJurnal,
 							ProjectNo:      updated.ProjectNo,
 							ProjectName:    updated.ProjectName}
 						db.Create(&gl1)
@@ -535,8 +622,8 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 							Deskripsi:      updated.Deskripsi,
 							Debit:          0,
 							Kredit:         updated.Debit,
-							Balance:        -updated.Debit,
 							NomorTransaksi: updated.NoTransaksi,
+							NomorJurnal:    nomorJurnal,
 							ProjectNo:      updated.ProjectNo,
 							ProjectName:    updated.ProjectName}
 						db.Create(&gl2)
@@ -551,8 +638,8 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 							Deskripsi:      updated.Deskripsi,
 							Debit:          updated.Debit,
 							Kredit:         0,
-							Balance:        updated.Debit,
 							NomorTransaksi: updated.NoTransaksi,
+							NomorJurnal:    nomorJurnal,
 							ProjectNo:      updated.ProjectNo,
 							ProjectName:    updated.ProjectName}
 						db.Create(&gl1)
@@ -565,8 +652,8 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 							Deskripsi:      updated.Deskripsi,
 							Debit:          0,
 							Kredit:         updated.Debit,
-							Balance:        -updated.Debit,
 							NomorTransaksi: updated.NoTransaksi,
+							NomorJurnal:    nomorJurnal,
 							ProjectNo:      updated.ProjectNo,
 							ProjectName:    updated.ProjectName}
 						db.Create(&gl2)
@@ -580,8 +667,8 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 							Deskripsi:      updated.Deskripsi,
 							Debit:          updated.Kredit,
 							Kredit:         0,
-							Balance:        updated.Kredit,
 							NomorTransaksi: updated.NoTransaksi,
+							NomorJurnal:    nomorJurnal,
 							ProjectNo:      updated.ProjectNo,
 							ProjectName:    updated.ProjectName}
 						db.Create(&gl1)
@@ -594,8 +681,8 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 							Deskripsi:      updated.Deskripsi,
 							Debit:          0,
 							Kredit:         updated.Kredit,
-							Balance:        -updated.Kredit,
 							NomorTransaksi: updated.NoTransaksi,
+							NomorJurnal:    nomorJurnal,
 							ProjectNo:      updated.ProjectNo,
 							ProjectName:    updated.ProjectName}
 						db.Create(&gl2)
@@ -611,13 +698,14 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 // DELETE input transaksi
 func DeleteInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		id := c.Param("id")
 		var input models.InputTransaksi
 		if err := db.First(&input, id).Error; err == nil {
 			// ✅ LOG AUDIT TRAIL sebelum delete
-			LogAuditTrail(db, c, "input_transaksi", input.ID, "DELETE", 
+			LogAuditTrail(db, c, "input_transaksi", input.ID, "DELETE",
 				fmt.Sprintf("Transaksi %s dihapus: Debit=%f, Kredit=%f", input.NoTransaksi, input.Debit, input.Kredit))
-			
+
 			// Ambil semua GL terkait (termasuk yang sudah di-soft delete)
 			var gls []models.GL
 			db.Unscoped().Where("nomor_transaksi = ?", input.NoTransaksi).Find(&gls)

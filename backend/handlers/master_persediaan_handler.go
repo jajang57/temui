@@ -76,7 +76,7 @@ func parseDate(c *gin.Context, key string, def time.Time) time.Time {
 	if v == "" {
 		return def
 	}
-	t, err := time.Parse("2006-01-02", v)
+	t, err := time.ParseInLocation("2006-01-02", v, time.Local)
 	if err != nil {
 		return def
 	}
@@ -167,6 +167,48 @@ func (h *InventoryHandler) fetchEventsBetween(itemCode string, gudangID *uint, s
         LEFT JOIN %s mb ON mb.kode = d.kode_item
         WHERE h.deleted_at IS NULL%s%s%s
     `, pjDet, pjHdr, mgTbl, mbTbl, dateCond, itemCond, gudangCond)
+
+	// Adjustments
+	adjTbl := (models.Adjustment{}).TableName()
+	qAdj := fmt.Sprintf(`
+        SELECT a.tanggal,
+               'Penyesuaian' AS sumber,
+               a.no_bukti AS nomor,
+               a.item_id AS item_code,
+               COALESCE(mb.nama, '') AS item_name,
+               a.gudang_id,
+               COALESCE(g.nama, '') AS gudang,
+               CASE WHEN a.qty_diff > 0 THEN a.qty_diff ELSE 0 END AS qty_masuk,
+               CASE WHEN a.qty_diff < 0 THEN ABS(a.qty_diff) ELSE 0 END AS qty_keluar,
+               0 AS harga,
+               CASE WHEN a.qty_diff > 0 THEN mb.harga_beli ELSE 0 END AS dpp
+        FROM %s a
+        LEFT JOIN %s g ON g.id = a.gudang_id
+        LEFT JOIN %s mb ON mb.kode = a.item_id
+        WHERE a.deleted_at IS NULL
+    `, adjTbl, mgTbl, mbTbl)
+
+	// Add filters manual for Adjustment because alias is 'a' (above use 'h' and 'd')
+	argsAdj := []interface{}{}
+	if start != nil && end != nil {
+		qAdj += " AND a.tanggal BETWEEN ? AND ?"
+		argsAdj = append(argsAdj, *start, *end)
+	} else if start != nil {
+		qAdj += " AND a.tanggal >= ?"
+		argsAdj = append(argsAdj, *start)
+	} else if end != nil {
+		qAdj += " AND a.tanggal <= ?"
+		argsAdj = append(argsAdj, *end)
+	}
+	if itemCode != "" {
+		qAdj += " AND a.item_id = ?"
+		argsAdj = append(argsAdj, itemCode)
+	}
+	if gudangID != nil {
+		qAdj += " AND a.gudang_id = ?"
+		argsAdj = append(argsAdj, *gudangID)
+	}
+
 	var inRows []invEvent
 	if err := h.DB.Raw(qIn, args...).Scan(&inRows).Error; err != nil {
 		return nil, err
@@ -180,18 +222,34 @@ func (h *InventoryHandler) fetchEventsBetween(itemCode string, gudangID *uint, s
 	}
 	evs = append(evs, outRows...)
 
+	// Adjustments
+	var adjRows []invEvent
+	if err := h.DB.Raw(qAdj, argsAdj...).Scan(&adjRows).Error; err != nil {
+		return nil, err
+	}
+	evs = append(evs, adjRows...)
+
 	// Sortir: masuk dulu lalu keluar di tanggal sama
 	sort.Slice(evs, func(i, j int) bool {
 		if evs[i].Tanggal.Equal(evs[j].Tanggal) {
 			if evs[i].Sumber == evs[j].Sumber {
 				return evs[i].Nomor < evs[j].Nomor
 			}
-			if evs[i].Sumber == "Pembelian" && evs[j].Sumber == "Penjualan" {
+			if evs[i].Sumber == "Saldo Awal" {
 				return true
 			}
-			if evs[i].Sumber == "Penjualan" && evs[j].Sumber == "Pembelian" {
+			if evs[j].Sumber == "Saldo Awal" {
 				return false
 			}
+
+			// Prioritize Masuk (Pembelian/Adj Surplus) over Keluar
+			if evs[i].QtyMasuk > 0 && evs[j].QtyKeluar > 0 {
+				return true
+			}
+			if evs[i].QtyKeluar > 0 && evs[j].QtyMasuk > 0 {
+				return false
+			}
+
 			return evs[i].Sumber < evs[j].Sumber
 		}
 		return evs[i].Tanggal.Before(evs[j].Tanggal)
@@ -257,7 +315,9 @@ func (h *InventoryHandler) GetInventorySummary(c *gin.Context) {
 	}
 	now := time.Now()
 	start := parseDate(c, "startDate", time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC))
+	// force end of day for endDate
 	end := parseDate(c, "endDate", now)
+	end = time.Date(end.Year(), end.Month(), end.Day(), 23, 59, 59, 0, end.Location())
 
 	// saldo awal s.d. H-1
 	before := start.AddDate(0, 0, -1)
@@ -359,7 +419,9 @@ func (h *InventoryHandler) GetInventoryMutasi(c *gin.Context) {
 	}
 	now := time.Now()
 	start := parseDate(c, "startDate", time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC))
+	// force end of day for endDate
 	end := parseDate(c, "endDate", now)
+	end = time.Date(end.Year(), end.Month(), end.Day(), 23, 59, 59, 0, end.Location())
 
 	before := start.AddDate(0, 0, -1)
 	evBefore, err := h.fetchEventsBetween(itemCode, gidPtr, nil, &before)

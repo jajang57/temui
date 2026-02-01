@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -94,10 +95,11 @@ func (h *PembelianHandler) CreatePembelian(c *gin.Context) {
 	}
 
 	// Validation: ensure required fields
+	// Allow empty/AUTO for auto-generation
 	if req.NomorAPInvoice == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Nomor AP Invoice harus diisi"})
-		return
+		req.NomorAPInvoice = "AUTO"
 	}
+
 	if req.SupplierID == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Pemasok harus dipilih"})
 		return
@@ -114,11 +116,13 @@ func (h *PembelianHandler) CreatePembelian(c *gin.Context) {
 		return
 	}
 
-	// Check duplicate nomor AP Invoice
-	var existing models.Pembelian
-	if err := h.DB.Where("nomor_ap_invoice = ?", req.NomorAPInvoice).First(&existing).Error; err == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Nomor AP Invoice sudah ada"})
-		return
+	// Check duplicate jika bukan AUTO
+	if req.NomorAPInvoice != "AUTO" {
+		var existing models.Pembelian
+		if err := h.DB.Where("nomor_ap_invoice = ?", req.NomorAPInvoice).First(&existing).Error; err == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Nomor AP Invoice sudah ada"})
+			return
+		}
 	}
 
 	// START TRANSACTION
@@ -129,6 +133,17 @@ func (h *PembelianHandler) CreatePembelian(c *gin.Context) {
 			log.Printf("[pembelian] panic during transaction: %v", r)
 		}
 	}()
+
+	// Generate Nomor AP Invoice jika AUTO
+	if req.NomorAPInvoice == "AUTO" {
+		newAPInvoice, err := GenerateNomorAPInvoice(tx, req.Tanggal)
+		if err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal generate nomor AP invoice", "details": err.Error()})
+			return
+		}
+		req.NomorAPInvoice = newAPInvoice
+	}
 
 	// Hitung subtotal & totals dari details
 	var subtotal float64
@@ -199,39 +214,111 @@ func (h *PembelianHandler) CreatePembelian(c *gin.Context) {
 	})
 }
 
-// GetAllPembelian - Get All AP Invoices (beserta detail)
+// GetAllPembelian - Get All AP Invoices (paginated, searchable, sortable)
 func (h *PembelianHandler) GetAllPembelian(c *gin.Context) {
-	var pembelians []models.Pembelian
+	// Parse pagination params
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	search := c.Query("search")
+	sortBy := c.DefaultQuery("sort_by", "id")
+	sortOrder := c.DefaultQuery("sort_order", "desc")
 
-	if err := h.DB.Preload("Details").Find(&pembelians).Error; err != nil {
+	// Adjust page/limit defaults
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+	offset := (page - 1) * limit
+
+	var results []struct {
+		models.Pembelian
+		SupplierNama string `json:"supplierNama"`
+	}
+	var total int64
+
+	// Build query with JOIN
+	query := h.DB.Table("pembelians").
+		Select("pembelians.*, master_pemasoks.nama as supplier_nama").
+		Joins("LEFT JOIN master_pemasoks ON pembelians.supplier_id = master_pemasoks.id")
+
+	// Global Search (AP Invoice OR Supplier Name OR Status)
+	if search != "" {
+		searchLike := "%" + strings.ToLower(search) + "%"
+		query = query.Where("LOWER(pembelians.nomor_ap_invoice) LIKE ? OR LOWER(master_pemasoks.nama) LIKE ? OR LOWER(pembelians.status) LIKE ?", searchLike, searchLike, searchLike)
+	}
+
+	// Specific Filters
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+	supplierID := c.Query("supplier_id")
+
+	if startDate != "" && endDate != "" {
+		query = query.Where("pembelians.tanggal BETWEEN ? AND ?", startDate, endDate)
+	}
+	if supplierID != "" {
+		query = query.Where("pembelians.supplier_id = ?", supplierID)
+	}
+
+	// Dynamic Sorting
+	switch sortBy {
+	case "nomorAPInvoice":
+		sortBy = "pembelians.nomor_ap_invoice"
+	case "tanggal":
+		sortBy = "pembelians.tanggal"
+	case "supplierNama":
+		sortBy = "master_pemasoks.nama"
+	case "total":
+		sortBy = "pembelians.total"
+	case "status":
+		sortBy = "pembelians.status"
+	default:
+		sortBy = "pembelians.id"
+	}
+	if sortOrder != "asc" {
+		sortOrder = "desc"
+	}
+
+	// Apply Sorting
+	query = query.Order(fmt.Sprintf("%s %s", sortBy, sortOrder))
+
+	// Count total before pagination
+	query.Count(&total)
+
+	// Fetch data with pagination
+	if err := query.Limit(limit).Offset(offset).Scan(&results).Error; err != nil {
 		log.Printf("[pembelian] failed to fetch AP invoices: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data AP Invoice"})
 		return
 	}
 
-	// Format response untuk frontend
-	var response []gin.H
-	for _, p := range pembelians {
-		// Get pemasok name dari MasterPemasok
-		var pemasok models.MasterPemasok
-		pemasokName := ""
-		if err := h.DB.First(&pemasok, p.SupplierID).Error; err == nil {
-			pemasokName = pemasok.Nama
-		}
+	// Calculate total pages
+	totalPages := int(math.Ceil(float64(total) / float64(limit)))
 
-		response = append(response, gin.H{
-			"id":             p.ID,
-			"nomorapinvoice": p.NomorAPInvoice,
-			"tanggal":        p.Tanggal.Format("2006-01-02"),
-			"supplierId":     p.SupplierID,
-			"supplierNama":   pemasokName, // Dari MasterPemasok.Nama
-			"total":          p.Total,
-			"status":         p.Status,
-			"details":        p.Details,
+	// Format response matches struct
+	var data []gin.H
+	for _, r := range results {
+		data = append(data, gin.H{
+			"id":             r.ID,
+			"nomorapinvoice": r.NomorAPInvoice,
+			"tanggal":        r.Tanggal.Format("2006-01-02"),
+			"supplierId":     r.SupplierID,
+			"supplierNama":   r.SupplierNama, // From JOIN
+			"total":          r.Total,
+			"status":         r.Status,
 		})
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, gin.H{
+		"data": data,
+		"meta": gin.H{
+			"total":      total,
+			"page":       page,
+			"limit":      limit,
+			"totalPages": totalPages,
+		},
+	})
 }
 
 // GetPembelianByID - Get AP Invoice by ID
@@ -695,6 +782,11 @@ func parseDppFormula(s string) float64 {
 func GenerateAPInvoiceGLLines(db *gorm.DB, pembelian models.Pembelian) ([]models.GL, error) {
 	var glLines []models.GL
 
+	nomorJurnal, err := GenerateNomorJurnal(db, pembelian.Tanggal)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate nomor jurnal: %w", err)
+	}
+
 	log.Printf("[pembelian] GenerateAPInvoiceGLLines for %s", pembelian.NomorAPInvoice)
 
 	// Get pemasok currency accounts
@@ -825,6 +917,9 @@ func GenerateAPInvoiceGLLines(db *gorm.DB, pembelian models.Pembelian) ([]models
 			Debit:          amount,
 			Kredit:         0,
 			NomorTransaksi: pembelian.NomorAPInvoice,
+			NomorJurnal:    nomorJurnal,
+			ContactID:      pembelian.SupplierID,
+			ContactType:    "supplier",
 		})
 	}
 
@@ -840,6 +935,9 @@ func GenerateAPInvoiceGLLines(db *gorm.DB, pembelian models.Pembelian) ([]models
 			Debit:          amount,
 			Kredit:         0,
 			NomorTransaksi: pembelian.NomorAPInvoice,
+			NomorJurnal:    nomorJurnal,
+			ContactID:      pembelian.SupplierID,
+			ContactType:    "supplier",
 		})
 	}
 
@@ -852,6 +950,9 @@ func GenerateAPInvoiceGLLines(db *gorm.DB, pembelian models.Pembelian) ([]models
 			Debit:          pembelian.Freight,
 			Kredit:         0,
 			NomorTransaksi: pembelian.NomorAPInvoice,
+			NomorJurnal:    nomorJurnal,
+			ContactID:      pembelian.SupplierID,
+			ContactType:    "supplier",
 		})
 	}
 
@@ -864,6 +965,9 @@ func GenerateAPInvoiceGLLines(db *gorm.DB, pembelian models.Pembelian) ([]models
 			Debit:          pembelian.Stamp,
 			Kredit:         0,
 			NomorTransaksi: pembelian.NomorAPInvoice,
+			NomorJurnal:    nomorJurnal,
+			ContactID:      pembelian.SupplierID,
+			ContactType:    "supplier",
 		})
 	}
 
@@ -876,6 +980,9 @@ func GenerateAPInvoiceGLLines(db *gorm.DB, pembelian models.Pembelian) ([]models
 			Debit:          0,
 			Kredit:         totalDiscount,
 			NomorTransaksi: pembelian.NomorAPInvoice,
+			NomorJurnal:    nomorJurnal,
+			ContactID:      pembelian.SupplierID,
+			ContactType:    "supplier",
 		})
 	}
 
@@ -912,6 +1019,9 @@ func GenerateAPInvoiceGLLines(db *gorm.DB, pembelian models.Pembelian) ([]models
 			Debit:          0,
 			Kredit:         totalPPH,
 			NomorTransaksi: pembelian.NomorAPInvoice,
+			NomorJurnal:    nomorJurnal,
+			ContactID:      pembelian.SupplierID,
+			ContactType:    "supplier",
 		})
 	}
 
@@ -934,7 +1044,10 @@ func GenerateAPInvoiceGLLines(db *gorm.DB, pembelian models.Pembelian) ([]models
 		NomorTransaksi: pembelian.NomorAPInvoice,
 		Debit:          0,
 		Kredit:         apAmount,
+		NomorJurnal:    nomorJurnal,
 		Deskripsi:      fmt.Sprintf("Hutang Usaha - %s", pembelian.NomorAPInvoice),
+		ContactID:      pembelian.SupplierID,
+		ContactType:    "supplier",
 	})
 
 	log.Printf("[pembelian] Generated %d GL lines for %s", len(glLines), pembelian.NomorAPInvoice)
