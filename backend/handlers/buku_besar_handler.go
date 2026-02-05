@@ -31,6 +31,7 @@ type BukuBesarResponse struct {
 
 func GetBukuBesar(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		var req BukuBesarRequest
 		if err := c.ShouldBindQuery(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid params"})

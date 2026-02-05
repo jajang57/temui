@@ -12,6 +12,7 @@ import (
 // GetMasterBarangJasa - Mengambil semua data barang/jasa
 func GetMasterBarangJasa(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		var barangJasa []models.MasterBarangJasa
 
 		// Karena menggunakan hard delete, tidak perlu filter deleted_at
@@ -27,6 +28,7 @@ func GetMasterBarangJasa(db *gorm.DB) gin.HandlerFunc {
 // CreateMasterBarangJasa - Membuat barang/jasa baru
 func CreateMasterBarangJasa(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		var barangJasa models.MasterBarangJasa
 
 		if err := c.ShouldBindJSON(&barangJasa); err != nil {
@@ -77,6 +79,7 @@ func CreateMasterBarangJasa(db *gorm.DB) gin.HandlerFunc {
 // UpdateMasterBarangJasa - Mengupdate barang/jasa
 func UpdateMasterBarangJasa(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		id, err := strconv.Atoi(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "ID tidak valid"})
@@ -153,6 +156,7 @@ func UpdateMasterBarangJasa(db *gorm.DB) gin.HandlerFunc {
 // DeleteMasterBarangJasa - Menghapus barang/jasa
 func DeleteMasterBarangJasa(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		id, err := strconv.Atoi(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "ID tidak valid"})

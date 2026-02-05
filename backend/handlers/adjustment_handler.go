@@ -21,8 +21,9 @@ func NewAdjustmentHandler(db *gorm.DB) *AdjustmentHandler {
 
 // GetAdjustments returns list of adjustments with filters
 func (h *AdjustmentHandler) GetAdjustments(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	var adjustments []models.Adjustment
-	query := h.DB.Preload("Gudang").Preload("Item").Preload("ContraAccount").Order("tanggal desc, id desc")
+	query := db.Preload("Gudang").Preload("Item").Preload("ContraAccount").Order("tanggal desc, id desc")
 
 	if startDate := c.Query("startDate"); startDate != "" {
 		query = query.Where("tanggal >= ?", startDate)
@@ -44,6 +45,7 @@ func (h *AdjustmentHandler) GetAdjustments(c *gin.Context) {
 
 // GenerateNoBukti generates auto number like ADJ/2023/10/001
 func (h *AdjustmentHandler) GenerateNoBukti(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	tanggalStr := c.Query("tanggal")
 	if tanggalStr == "" {
 		tanggalStr = time.Now().Format("2006-01-02")
@@ -52,7 +54,7 @@ func (h *AdjustmentHandler) GenerateNoBukti(c *gin.Context) {
 	prefix := fmt.Sprintf("ADJ/%s/%s", t.Format("2006"), t.Format("01"))
 
 	var last models.Adjustment
-	h.DB.Where("no_bukti LIKE ?", prefix+"%").Order("no_bukti desc").First(&last)
+	db.Where("no_bukti LIKE ?", prefix+"%").Order("no_bukti desc").First(&last)
 
 	newSort := 1
 	if last.NoBukti != "" {
@@ -67,6 +69,7 @@ func (h *AdjustmentHandler) GenerateNoBukti(c *gin.Context) {
 
 // CreateAdjustment saves a new adjustment
 func (h *AdjustmentHandler) CreateAdjustment(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	var body models.Adjustment
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -77,7 +80,7 @@ func (h *AdjustmentHandler) CreateAdjustment(c *gin.Context) {
 	if body.NoBukti == "" {
 		prefix := fmt.Sprintf("ADJ/%s/%s", body.Tanggal.Format("2006"), body.Tanggal.Format("01"))
 		var last models.Adjustment
-		h.DB.Where("no_bukti LIKE ?", prefix+"%").Order("no_bukti desc").First(&last)
+		db.Where("no_bukti LIKE ?", prefix+"%").Order("no_bukti desc").First(&last)
 		newSort := 1
 		if last.NoBukti != "" {
 			var lastSeq int
@@ -91,7 +94,7 @@ func (h *AdjustmentHandler) CreateAdjustment(c *gin.Context) {
 	body.QtyDiff = body.QtyActual - body.QtySystem
 
 	// Start Transaction
-	tx := h.DB.Begin()
+	tx := db.Begin()
 
 	if err := tx.Create(&body).Error; err != nil {
 		tx.Rollback()
@@ -181,6 +184,7 @@ func (h *AdjustmentHandler) CreateAdjustment(c *gin.Context) {
 
 // UpdateAdjustment updates an existing adjustment and revises GL
 func (h *AdjustmentHandler) UpdateAdjustment(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	id := c.Param("id")
 	var body models.Adjustment
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -188,7 +192,7 @@ func (h *AdjustmentHandler) UpdateAdjustment(c *gin.Context) {
 		return
 	}
 
-	tx := h.DB.Begin()
+	tx := db.Begin()
 
 	var existing models.Adjustment
 	if err := tx.First(&existing, id).Error; err != nil {
@@ -304,8 +308,9 @@ func (h *AdjustmentHandler) UpdateAdjustment(c *gin.Context) {
 
 // DeleteAdjustment removes an adjustment
 func (h *AdjustmentHandler) DeleteAdjustment(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	id := c.Param("id")
-	if err := h.DB.Delete(&models.Adjustment{}, id).Error; err != nil {
+	if err := db.Delete(&models.Adjustment{}, id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

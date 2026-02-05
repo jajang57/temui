@@ -703,6 +703,12 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Validasi: pastikan Akun Transaksi dipilih
+    if (!form.akunTransaksi) {
+      alert("Harap pilih Akun Transaksi terlebih dahulu");
+      return;
+    }
+
     // Validasi: pastikan salah satu dari debit atau kredit diisi
     if ((!form.debit || form.debit === "0") && (!form.kredit || form.kredit === "0")) {
       alert("Harap isi salah satu dari Debit atau Kredit");
@@ -793,25 +799,22 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
           alert("Transaksi berhasil disimpan!");
         }
 
-        // Trigger refresh table & jump ke transaksi terbaru setelah create
-        if (afterSubmit && response1 && response1.data) {
-          afterSubmit(form.coaAkunBank, response1.data);
-        } else if (afterSubmit) {
-          afterSubmit(form.coaAkunBank);
+        // ✅ ENHANCED: Pass created transaksi data to trigger jump
+        if (afterSubmit) {
+          // Use response1 data if available, or fallback to form data with ID from response
+          const createdData = response1.data || {
+            ...dataToSend,
+            id: response1.data?.id
+          };
+          afterSubmit(coaBankKode, createdData);
         }
 
-        // Reset form
-        setForm({
-          noTransaksi: "",
-          coaAkunBank: form.coaAkunBank, // JANGAN DIRESET
-          tanggal: getTodayLocal(),
-          akunTransaksi: "",
-          deskripsi: "",
-          projectNo: "",
-          projectName: "",
-          debit: "",
-          kredit: ""
-        });
+        // Reset form but keep COA logic handling in parent
+        handleResetAfterDelete();
+
+
+
+
 
         // Reset nilai format
         setFormattedDebit('');
@@ -893,7 +896,7 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
       )}
 
       <form
-        className="space-y-4 w-full rounded shadow p-6 mt-4"
+        className="space-y-2 w-full rounded shadow p-4 mt-4"
         style={{
           background: theme.formColor,
           color: theme.fontColor,
@@ -901,8 +904,34 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
         }}
         onSubmit={handleSubmit}
       >
+        {/* Header with Extra Actions */}
+        <div className="flex justify-between items-center mb-2">
+          <div className="text-sm font-semibold opacity-50">Input Transaksi</div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              style={{ background: "#10b981", color: "#fff", fontFamily: theme.fontFamily }}
+              className="px-3 py-1 rounded text-xs"
+              onClick={() => setShowBulkImportModal(true)}
+              title="Upload Excel"
+            >
+              📤 Import
+            </button>
+            <button
+              type="button"
+              style={{ background: "#3b82f6", color: "#fff", fontFamily: theme.fontFamily }}
+              className="px-3 py-1 rounded text-xs"
+              onClick={fetchAuditTrail}
+              disabled={!selectedTransaksiId}
+              title="Lihat Audit Trail"
+            >
+              📋 Audit
+            </button>
+          </div>
+        </div>
+
         {/* Baris 1: COA Akun Bank, Nomor Transaksi, Tanggal */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
           <div className="md:col-span-5">
             <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
               COA Akun Bank
@@ -1026,14 +1055,14 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
         </div>
 
         {/* Baris 2: Akun Transaksi, Button Penjualan, Button Pembelian */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
           <div className="md:col-span-8">
-            <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+            <label className="block mb-1 font-medium text-xs" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
               Akun Transaksi
             </label>
             <Select
               name="akunTransaksi"
-              value={akunTransaksiOptions.find(opt => opt.value === form.akunTransaksi)}
+              value={akunTransaksiOptions.find(opt => opt.value === form.akunTransaksi) || null}
               onChange={(selectedOption) => {
                 setForm({
                   ...form,
@@ -1049,13 +1078,15 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
                   ...base,
                   background: theme.fieldColor,
                   borderColor: '#d1d5db',
-                  minHeight: '42px',
+                  minHeight: '34px', // Compact
                   fontFamily: theme.fontFamily,
+                  fontSize: '0.875rem'
                 }),
                 menu: (base) => ({
                   ...base,
                   background: theme.fieldColor,
                   fontFamily: theme.fontFamily,
+                  fontSize: '0.875rem'
                 }),
                 option: (base, state) => ({
                   ...base,
@@ -1083,14 +1114,14 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
             />
           </div>
           <div className="md:col-span-2">
-            <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+            <label className="block mb-1 font-medium text-xs" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
               &nbsp;
             </label>
             <button
               type="button"
               onClick={fetchSummaryPenjualan}
               disabled={loadingSummary}
-              className="px-3 py-2 rounded whitespace-nowrap text-sm w-full"
+              className="px-2 py-1.5 rounded whitespace-nowrap text-xs w-full font-semibold"
               style={{
                 background: loadingSummary ? "#999" : "#10b981",
                 color: "#fff",
@@ -1102,14 +1133,14 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
             </button>
           </div>
           <div className="md:col-span-2">
-            <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+            <label className="block mb-1 font-medium text-xs" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
               &nbsp;
             </label>
             <button
               type="button"
               onClick={fetchSummaryPembelian}
               disabled={loadingSummary}
-              className="px-3 py-2 rounded whitespace-nowrap text-sm w-full"
+              className="px-2 py-1.5 rounded whitespace-nowrap text-xs w-full font-semibold"
               style={{
                 background: loadingSummary ? "#999" : "#ef4444",
                 color: "#fff",
@@ -1122,13 +1153,14 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
           </div>
         </div>
 
-        {/* Baris 3: Debit & Kredit */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+        {/* Baris 3: Debit, Kredit, Deskripsi (MERGED) */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
+          {/* Debit: 2 cols */}
+          <div className="md:col-span-2">
+            <label className="block mb-1 font-medium text-xs" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
               Debit
             </label>
-            <div className="flex gap-2">
+            <div className="flex gap-1">
               <input
                 type="text"
                 name="debit"
@@ -1137,39 +1169,18 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
                 onBlur={handleDebitBlur}
                 onFocus={handleDebitFocus}
                 disabled={form.kredit !== undefined && form.kredit !== null && form.kredit !== "" && form.kredit !== "0"}
-                className="border rounded px-3 py-2 flex-1"
+                className="border rounded px-2 py-1 text-sm w-full"
                 placeholder="0"
-                style={{
-                  background: theme.fieldColor,
-                  color: theme.fontColor,
-                  fontFamily: theme.fontFamily,
-                }}
+                style={{ background: theme.fieldColor, color: theme.fontColor, fontFamily: theme.fontFamily }}
               />
-              {form.debit && form.debit !== "0" && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForm({ ...form, debit: "" });
-                    setFormattedDebit("");
-                  }}
-                  style={{
-                    background: theme.buttonHapus,
-                    color: "#fff",
-                    fontFamily: theme.fontFamily,
-                  }}
-                  className="px-2 py-1 rounded text-sm"
-                  title="Clear Debit"
-                >
-                  ✕
-                </button>
-              )}
             </div>
           </div>
-          <div>
-            <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+          {/* Kredit: 2 cols */}
+          <div className="md:col-span-2">
+            <label className="block mb-1 font-medium text-xs" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
               Kredit
             </label>
-            <div className="flex gap-2">
+            <div className="flex gap-1">
               <input
                 type="text"
                 name="kredit"
@@ -1178,82 +1189,50 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
                 onBlur={handleKreditBlur}
                 onFocus={handleKreditFocus}
                 disabled={form.debit && form.debit !== "0"}
-                className="border rounded px-3 py-2 flex-1"
+                className="border rounded px-2 py-1 text-sm w-full"
                 placeholder="0"
-                style={{
-                  background: theme.fieldColor,
-                  color: theme.fontColor,
-                  fontFamily: theme.fontFamily,
-                }}
+                style={{ background: theme.fieldColor, color: theme.fontColor, fontFamily: theme.fontFamily }}
               />
-              {form.kredit && form.kredit !== "0" && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForm({ ...form, kredit: "" });
-                    setFormattedKredit("");
-                  }}
-                  style={{
-                    background: theme.buttonHapus,
-                    color: "#fff",
-                    fontFamily: theme.fontFamily,
-                  }}
-                  className="px-2 py-1 rounded text-sm"
-                  title="Clear Kredit"
-                >
-                  ✕
-                </button>
-              )}
             </div>
+          </div>
+          {/* Deskripsi: 8 cols */}
+          <div className="md:col-span-8">
+            <label className="block mb-1 font-medium text-xs" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+              Deskripsi
+            </label>
+            <input
+              type="text"
+              name="deskripsi"
+              value={form.deskripsi}
+              onChange={handleChange}
+              className="w-full border rounded px-2 py-1 text-sm"
+              required
+              style={{ background: theme.fieldColor, color: theme.fontColor, fontFamily: theme.fontFamily }}
+            />
           </div>
         </div>
 
-        {/* Baris 4: Deskripsi */}
-        <div>
-          <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
-            Deskripsi
-          </label>
-          <input
-            type="text"
-            name="deskripsi"
-            value={form.deskripsi}
-            onChange={handleChange}
-            className="w-full border rounded px-3 py-2"
-            required
-            style={{
-              background: theme.fieldColor,
-              color: theme.fontColor,
-              fontFamily: theme.fontFamily,
-            }}
-          />
-        </div>
-
-        {/* Baris 5: Project No & Project Name */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+        {/* Baris 4: Project No, Project Name, Action Buttons (MERGED) */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+          {/* Project No: 3 cols */}
+          <div className="md:col-span-3">
+            <label className="block mb-1 font-medium text-xs" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
               Project No
             </label>
             <select
               name="projectNo"
               value={form.projectNo}
               onChange={handleChange}
-              className="w-full border rounded px-3 py-2"
-              style={{
-                background: theme.fieldColor,
-                color: theme.fontColor,
-                fontFamily: theme.fontFamily,
-              }}
+              className="w-full border rounded px-2 py-1 text-sm"
+              style={{ background: theme.fieldColor, color: theme.fontColor, fontFamily: theme.fontFamily }}
             >
               <option value="">Pilih Project</option>
               {renderProjectOptions()}
             </select>
-            <div className="text-xs mt-1" style={{ color: theme.fontColor }}>
-              Projects loaded: {projectList.length}
-            </div>
           </div>
-          <div>
-            <label className="block mb-1 font-medium" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+          {/* Project Name: 3 cols */}
+          <div className="md:col-span-3">
+            <label className="block mb-1 font-medium text-xs" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
               Project Name
             </label>
             <input
@@ -1261,86 +1240,37 @@ const InputTransaksiForm = forwardRef(({ onCOAChange, afterSubmit }, ref) => {
               name="projectName"
               value={form.projectName}
               onChange={handleChange}
-              className="w-full border rounded px-3 py-2"
-              placeholder="Nama project akan terisi otomatis"
+              className="w-full border rounded px-2 py-1 text-sm"
+              placeholder="Auto-fill"
               readOnly
-              style={{
-                background: theme.fieldColor,
-                color: theme.fontColor,
-                fontFamily: theme.fontFamily,
-              }}
+              style={{ background: theme.fieldColor, color: theme.fontColor, fontFamily: theme.fontFamily }}
             />
           </div>
-        </div>
-
-        {/* Baris 6: Tombol */}
-        <div className="flex gap-2 justify-between mt-4">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              style={{
-                background: "#10b981",
-                color: "#fff",
-                fontFamily: theme.fontFamily,
-              }}
-              className="px-6 py-2 rounded"
-              onClick={() => setShowBulkImportModal(true)}
-              title="Upload Excel untuk import multiple transaksi"
-            >
-              📤 Bulk Import
-            </button>
-            <button
-              type="button"
-              style={{
-                background: "#3b82f6",
-                color: "#fff",
-                fontFamily: theme.fontFamily,
-              }}
-              className="px-6 py-2 rounded"
-              onClick={fetchAuditTrail}
-              disabled={!selectedTransaksiId}
-              title={!selectedTransaksiId ? "Pilih transaksi dengan double-click untuk melihat audit trail" : "Lihat history perubahan transaksi"}
-            >
-              📋 Audit Trail
-            </button>
-          </div>
-          <div className="flex gap-2">
+          {/* Buttons: 6 cols (Right Aligned) */}
+          <div className="md:col-span-6 flex gap-2 justify-end">
             <button
               type="submit"
-              style={{
-                background: isEditMode ? theme.buttonUpdate : theme.buttonSimpan,
-                color: "#fff",
-                fontFamily: theme.fontFamily,
-              }}
-              className="px-6 py-2 rounded"
+              style={{ background: isEditMode ? theme.buttonUpdate : theme.buttonSimpan, color: "#fff", fontFamily: theme.fontFamily }}
+              className="px-4 py-1.5 rounded text-sm font-bold shadow-sm"
             >
               {isEditMode ? "Update" : "Simpan"}
             </button>
             <button
               type="button"
-              style={{
-                background: theme.buttonHapus,
-                color: "#fff",
-                fontFamily: theme.fontFamily,
-              }}
-              className="px-6 py-2 rounded"
+              style={{ background: theme.buttonHapus, color: "#fff", fontFamily: theme.fontFamily }}
+              className="px-4 py-1.5 rounded text-sm shadow-sm"
               onClick={handleDeleteTransaksi}
               disabled={!isEditMode || !selectedTransaksiId}
-              title={!isEditMode ? "Pilih transaksi dengan double-click untuk menghapus" : "Hapus transaksi yang dipilih"}
             >
               Hapus
             </button>
             <button
               type="button"
-              style={{
-                background: theme.buttonRefresh,
-                color: "#fff",
-                fontFamily: theme.fontFamily,
-              }}
-              className="px-6 py-2 rounded"
+              style={{ background: theme.buttonRefresh, color: "#fff", fontFamily: theme.fontFamily }}
+              className="px-4 py-1.5 rounded text-sm shadow-sm"
               onClick={handleResetForm}
             >
-              Kosongkan
+              Reset
             </button>
           </div>
         </div>

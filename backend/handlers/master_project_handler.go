@@ -65,6 +65,7 @@ func generateProjectCode(db *gorm.DB) (string, error) {
 // CreateMasterProject handles the creation of a new project
 func CreateMasterProject(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		fmt.Println("[DEBUG] CreateMasterProject: Request received")
 
 		var request struct {
@@ -114,6 +115,7 @@ func CreateMasterProject(db *gorm.DB) gin.HandlerFunc {
 // GetMasterProjects handles fetching all projects
 func GetMasterProjects(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		fmt.Println("[DEBUG] GetMasterProjects: Request received")
 
 		var projects []models.MasterProject
@@ -131,6 +133,7 @@ func GetMasterProjects(db *gorm.DB) gin.HandlerFunc {
 // UpdateMasterProject handles updating a project
 func UpdateMasterProject(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		fmt.Printf("[DEBUG] UpdateMasterProject: Request received for ID: %s\n", c.Param("id"))
 
 		var project models.MasterProject
@@ -169,6 +172,7 @@ func UpdateMasterProject(db *gorm.DB) gin.HandlerFunc {
 // DeleteMasterProject handles deleting a project
 func DeleteMasterProject(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		fmt.Printf("[DEBUG] DeleteMasterProject: Request received for ID: %s\n", c.Param("id"))
 
 		var project models.MasterProject

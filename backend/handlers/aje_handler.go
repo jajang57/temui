@@ -15,6 +15,7 @@ import (
 // Handler untuk generate nomor bukti otomatis AJE
 func GenerateNoBuktiAJE(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		tanggal := c.Query("tanggal") // format yyyy-mm-dd
 		userID := c.Query("user")
 		if tanggal == "" || userID == "" {
@@ -65,6 +66,7 @@ func GenerateNoBuktiAJE(db *gorm.DB) gin.HandlerFunc {
 // Handler untuk posting AJE (set posted = true)
 func PostingAJE(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		var req struct {
 			ID uint `json:"id"`
 		}
@@ -137,6 +139,7 @@ func PostingAJE(db *gorm.DB) gin.HandlerFunc {
 // Handler untuk unposting AJE (set posted = false)
 func UnpostingAJE(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		var req struct {
 			ID uint `json:"id"`
 		}
@@ -168,6 +171,7 @@ func UnpostingAJE(db *gorm.DB) gin.HandlerFunc {
 // Handler untuk mengambil semua AJE
 func GetAJE(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		var data []models.AJE
 		if err := db.Find(&data).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -180,6 +184,7 @@ func GetAJE(db *gorm.DB) gin.HandlerFunc {
 // Handler untuk menambah/memperbarui AJE
 func PostAJE(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		var ajes []models.AJE
 		if err := c.ShouldBindJSON(&ajes); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -220,6 +225,7 @@ type DeleteRequest struct {
 // Handler untuk menghapus AJE berdasarkan ID
 func DeleteAJE(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		var req DeleteRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
@@ -240,6 +246,7 @@ func DeleteAJE(db *gorm.DB) gin.HandlerFunc {
 // Handler untuk mengambil list COA yang is_kas_bank = false (untuk AJE)
 func GetCOAAkunAJE(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		var coas []models.MasterCOA
 		if err := db.Preload("MasterCategoryCOA").
 			Joins("JOIN master_category_coa ON master_category_coa.id = master_coa.master_category_coa_id").
@@ -255,6 +262,7 @@ func GetCOAAkunAJE(db *gorm.DB) gin.HandlerFunc {
 // Handler untuk cek apakah no_bukti sudah ada di tabel AJE
 func CekNoBuktiAJE(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		noBukti := c.Query("noBukti")
 		if noBukti == "" {
 			c.JSON(400, gin.H{"error": "noBukti wajib diisi"})
@@ -279,6 +287,7 @@ func CekNoBuktiAJE(db *gorm.DB) gin.HandlerFunc {
 // Handler untuk cek apakah no_bukti sudah ada di tabel GL
 func CekNoBuktiGL(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		noBukti := c.Query("noBukti")
 		if noBukti == "" {
 			c.JSON(400, gin.H{"error": "noBukti wajib diisi"})

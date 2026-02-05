@@ -164,22 +164,22 @@ export default function Layout({ children }) {
           </main>
         </>
       ) : (
-        <div className="flex min-h-screen relative">
+        <div className="flex h-screen overflow-hidden relative">
           {/* Sidebar Area */}
           <div
-            className={`transition-all duration-300 flex-shrink-0 no-print ${!sidebarOpen ? 'w-0' : ''}`}
+            className={`transition-[width] duration-300 flex-shrink-0 no-print ${!sidebarOpen ? 'w-0' : ''}`}
           >
             {/* SideNavbar now handles its own fixed positioning and placeholder */}
             <SideNavbar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
           </div>
 
           {/* Main Content Area (Header + Children) */}
-          <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
-            <div className="no-print">
+          <div className="flex-1 flex flex-col min-w-0 h-full transition-[width] duration-300">
+            <div className="no-print flex-shrink-0 z-20 relative">
               <Header theme={theme} setSidebarOpen={setSidebarOpen} />
             </div>
             <main
-              className="flex-1 p-6"
+              className="flex-1 p-6 overflow-y-auto"
               style={{
                 background: theme.backgroundColor,
               }}

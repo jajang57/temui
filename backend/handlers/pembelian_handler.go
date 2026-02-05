@@ -66,6 +66,7 @@ type CurrencyAccountsap struct {
 
 // CreatePembelian - Create AP Invoice (header + detail + GL)
 func (h *PembelianHandler) CreatePembelian(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	var req models.Pembelian
 	if err := c.ShouldBindJSON(&req); err != nil {
 		log.Printf("[pembelian] JSON bind error: %v", err)
@@ -111,7 +112,7 @@ func (h *PembelianHandler) CreatePembelian(c *gin.Context) {
 
 	// Validate pemasok exists
 	var pemasok models.MasterPemasok
-	if err := h.DB.First(&pemasok, req.SupplierID).Error; err != nil {
+	if err := db.First(&pemasok, req.SupplierID).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Pemasok tidak ditemukan"})
 		return
 	}
@@ -119,14 +120,14 @@ func (h *PembelianHandler) CreatePembelian(c *gin.Context) {
 	// Check duplicate jika bukan AUTO
 	if req.NomorAPInvoice != "AUTO" {
 		var existing models.Pembelian
-		if err := h.DB.Where("nomor_ap_invoice = ?", req.NomorAPInvoice).First(&existing).Error; err == nil {
+		if err := db.Where("nomor_ap_invoice = ?", req.NomorAPInvoice).First(&existing).Error; err == nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Nomor AP Invoice sudah ada"})
 			return
 		}
 	}
 
 	// START TRANSACTION
-	tx := h.DB.Begin()
+	tx := db.Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -216,6 +217,7 @@ func (h *PembelianHandler) CreatePembelian(c *gin.Context) {
 
 // GetAllPembelian - Get All AP Invoices (paginated, searchable, sortable)
 func (h *PembelianHandler) GetAllPembelian(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	// Parse pagination params
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
@@ -239,7 +241,7 @@ func (h *PembelianHandler) GetAllPembelian(c *gin.Context) {
 	var total int64
 
 	// Build query with JOIN
-	query := h.DB.Table("pembelians").
+	query := db.Table("pembelians").
 		Select("pembelians.*, master_pemasoks.nama as supplier_nama").
 		Joins("LEFT JOIN master_pemasoks ON pembelians.supplier_id = master_pemasoks.id")
 
@@ -323,10 +325,11 @@ func (h *PembelianHandler) GetAllPembelian(c *gin.Context) {
 
 // GetPembelianByID - Get AP Invoice by ID
 func (h *PembelianHandler) GetPembelianByID(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	id := c.Param("id")
 	var pembelian models.Pembelian
 
-	if err := h.DB.Preload("Details").First(&pembelian, id).Error; err != nil {
+	if err := db.Preload("Details").First(&pembelian, id).Error; err != nil {
 		log.Printf("[pembelian] AP Invoice not found: %v", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "AP Invoice tidak ditemukan"})
 		return
@@ -340,6 +343,7 @@ func (h *PembelianHandler) GetPembelianByID(c *gin.Context) {
 
 // UpdatePembelian - Delete All Then Recreate
 func (h *PembelianHandler) UpdatePembelian(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	id := c.Param("id")
 	log.Printf("[pembelian] UpdatePembelian request for ID=%s", id)
 
@@ -352,7 +356,7 @@ func (h *PembelianHandler) UpdatePembelian(c *gin.Context) {
 
 	// Get existing pembelian for reference
 	var existing models.Pembelian
-	if err := h.DB.First(&existing, id).Error; err != nil {
+	if err := db.First(&existing, id).Error; err != nil {
 		log.Printf("[pembelian] AP Invoice not found for update: %v", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "AP Invoice tidak ditemukan"})
 		return
@@ -360,7 +364,7 @@ func (h *PembelianHandler) UpdatePembelian(c *gin.Context) {
 
 	// Validate pemasok exists
 	var pemasok models.MasterPemasok
-	if err := h.DB.First(&pemasok, req.SupplierID).Error; err != nil {
+	if err := db.First(&pemasok, req.SupplierID).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Pemasok tidak ditemukan"})
 		return
 	}
@@ -400,7 +404,7 @@ func (h *PembelianHandler) UpdatePembelian(c *gin.Context) {
 	}
 
 	// ✅ START TRANSACTION - DELETE ALL THEN RECREATE
-	tx := h.DB.Begin()
+	tx := db.Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -511,7 +515,7 @@ func (h *PembelianHandler) UpdatePembelian(c *gin.Context) {
 	log.Printf("[pembelian] STEP 8: Return fresh data untuk frontend sync...")
 	// 8. Return fresh data untuk frontend sync
 	var freshData models.Pembelian
-	if err := h.DB.Preload("Details").First(&freshData, req.ID).Error; err != nil {
+	if err := db.Preload("Details").First(&freshData, req.ID).Error; err != nil {
 		log.Printf("[pembelian] failed to fetch fresh data: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data terbaru"})
 		return
@@ -528,18 +532,19 @@ func (h *PembelianHandler) UpdatePembelian(c *gin.Context) {
 
 // DeletePembelian - Delete AP Invoice
 func (h *PembelianHandler) DeletePembelian(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	id := c.Param("id")
 
 	// Get existing pembelian for GL cleanup
 	var existing models.Pembelian
-	if err := h.DB.First(&existing, id).Error; err != nil {
+	if err := db.First(&existing, id).Error; err != nil {
 		log.Printf("[pembelian] AP Invoice not found for delete: %v", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "AP Invoice tidak ditemukan"})
 		return
 	}
 
 	// START TRANSACTION
-	tx := h.DB.Begin()
+	tx := db.Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -588,10 +593,11 @@ func (h *PembelianHandler) DeletePembelian(c *gin.Context) {
 
 // GetPembelianByNomor - Get AP Invoice by nomor
 func (h *PembelianHandler) GetPembelianByNomor(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	nomor := c.Param("nomor")
 	var pembelian models.Pembelian
 
-	if err := h.DB.Preload("Details").Where("nomor_ap_invoice = ?", nomor).First(&pembelian).Error; err != nil {
+	if err := db.Preload("Details").Where("nomor_ap_invoice = ?", nomor).First(&pembelian).Error; err != nil {
 		log.Printf("[pembelian] AP Invoice not found by nomor: %v", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "AP Invoice tidak ditemukan"})
 		return
@@ -605,6 +611,7 @@ func (h *PembelianHandler) GetPembelianByNomor(c *gin.Context) {
 
 // UpdatePembelianStatus - Update only status
 func (h *PembelianHandler) UpdatePembelianStatus(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	id := c.Param("id")
 	var req struct {
 		Status string `json:"status" binding:"required"`
@@ -615,7 +622,7 @@ func (h *PembelianHandler) UpdatePembelianStatus(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Model(&models.Pembelian{}).Where("id = ?", id).Update("status", req.Status).Error; err != nil {
+	if err := db.Model(&models.Pembelian{}).Where("id = ?", id).Update("status", req.Status).Error; err != nil {
 		log.Printf("[pembelian] failed to update status: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal update status"})
 		return
@@ -629,11 +636,12 @@ func (h *PembelianHandler) UpdatePembelianStatus(c *gin.Context) {
 
 // GetPembelianReport - Generate report data
 func (h *PembelianHandler) GetPembelianReport(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
 	supplierID := c.Query("supplier_id")
 
-	query := h.DB.Preload("Details")
+	query := db.Preload("Details")
 
 	if startDate != "" && endDate != "" {
 		query = query.Where("tanggal BETWEEN ? AND ?", startDate, endDate)
@@ -658,6 +666,7 @@ func (h *PembelianHandler) GetPembelianReport(c *gin.Context) {
 
 // GetNextAPInvoiceNumber - Generate next AP Invoice number
 func (h *PembelianHandler) GetNextAPInvoiceNumber(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	today := time.Now()
 	year := today.Format("2006")
 	month := today.Format("01")
@@ -666,7 +675,7 @@ func (h *PembelianHandler) GetNextAPInvoiceNumber(c *gin.Context) {
 	prefix := fmt.Sprintf("APINV-%s%s%s-", year, month, day)
 
 	var lastPembelian models.Pembelian
-	if err := h.DB.Where("nomor_ap_invoice LIKE ?", prefix+"%").
+	if err := db.Where("nomor_ap_invoice LIKE ?", prefix+"%").
 		Order("nomor_ap_invoice DESC").
 		First(&lastPembelian).Error; err != nil {
 		// No previous invoice, start with 001

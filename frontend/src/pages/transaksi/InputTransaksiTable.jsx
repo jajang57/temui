@@ -4,6 +4,7 @@ import api from "../../utils/api";
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { RemoveRedEye as ViewIcon } from '@mui/icons-material';
+import { ArrowUp, ArrowDown, Filter, X, Search as SearchIcon, RotateCcw } from 'lucide-react';
 import JournalPreviewModal from '../../components/JournalPreviewModal';
 
 function formatDateDMY(dateStr) {
@@ -36,6 +37,11 @@ export default function InputTransaksiTable({
   // Journal Preview State
   const [showJournalModal, setShowJournalModal] = useState(false);
   const [journalNomorTransaksi, setJournalNomorTransaksi] = useState("");
+
+  // ✅ SORT & FILTER STATE
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [columnFilters, setColumnFilters] = useState({});
+  const [activeFilterColumn, setActiveFilterColumn] = useState(null);
 
   const itemsPerPage = 10;
 
@@ -210,22 +216,92 @@ export default function InputTransaksiTable({
   // ✅ DATA PROCESSING
   const { filteredData, sortedFiltered } = React.useMemo(() => {
 
-    // Step 1: Filter data
+    // Step 1: Filter data (Global + Column)
     const filtered = data.filter(row => {
-      if (!search) return true;
-      const searchLower = search.toLowerCase();
-      return (
-        String(row.noTransaksi || '').toLowerCase().includes(searchLower) ||
-        String(row.deskripsi || '').toLowerCase().includes(searchLower) ||
-        String(row.projectNo || '').toLowerCase().includes(searchLower) ||
-        String(row.projectName || '').toLowerCase().includes(searchLower) ||
-        getCoaName(row.coaAkunBank).toLowerCase().includes(searchLower) ||
-        getAkunTransaksiName(row.akunTransaksi).toLowerCase().includes(searchLower)
-      );
+      // 1. Global Search
+      let matchesGlobal = true;
+      if (search) {
+        const searchLower = search.toLowerCase();
+        matchesGlobal = (
+          String(row.noTransaksi || '').toLowerCase().includes(searchLower) ||
+          String(row.deskripsi || '').toLowerCase().includes(searchLower) ||
+          String(row.projectNo || '').toLowerCase().includes(searchLower) ||
+          String(row.projectName || '').toLowerCase().includes(searchLower) ||
+          getCoaName(row.coaAkunBank).toLowerCase().includes(searchLower) ||
+          getAkunTransaksiName(row.akunTransaksi).toLowerCase().includes(searchLower)
+        );
+      }
+      if (!matchesGlobal) return false;
+
+      // 2. Column Filters
+      const matchesColumns = Object.keys(columnFilters).every(key => {
+        const filterValue = columnFilters[key]?.toLowerCase();
+        if (!filterValue) return true;
+
+        let rowValue = "";
+        switch (key) {
+          case 'tanggal': rowValue = formatDateDMY(row.tanggal); break;
+          case 'coaAkunBank': rowValue = getCoaName(row.coaAkunBank); break;
+          case 'akunTransaksi': rowValue = getAkunTransaksiName(row.akunTransaksi); break;
+          case 'projectNo': rowValue = row.projectNo || ""; break;
+          case 'projectName': rowValue = getProjectName(row.projectNo); break;
+          case 'debit': rowValue = row.debit ? row.debit.toString() : ""; break;
+          case 'kredit': rowValue = row.kredit ? row.kredit.toString() : ""; break;
+          default: rowValue = String(row[key] || "");
+        }
+
+        return rowValue.toLowerCase().includes(filterValue);
+      });
+
+      return matchesColumns;
     });
 
-    // Step 2: Sort data (chronological order)
+    // Step 2: Sort data
     const sorted = filtered.sort((a, b) => {
+      // 1. Custom Sort
+      if (sortConfig.key) {
+        let valA, valB;
+
+        // Extract values based on key
+        switch (sortConfig.key) {
+          case 'tanggal':
+            valA = new Date(a.tanggal || 0).getTime();
+            valB = new Date(b.tanggal || 0).getTime();
+            break;
+          case 'coaAkunBank':
+            valA = getCoaName(a.coaAkunBank);
+            valB = getCoaName(b.coaAkunBank);
+            break;
+          case 'akunTransaksi':
+            valA = getAkunTransaksiName(a.akunTransaksi);
+            valB = getAkunTransaksiName(b.akunTransaksi);
+            break;
+          case 'projectName':
+            valA = getProjectName(a.projectNo);
+            valB = getProjectName(b.projectNo);
+            break;
+          case 'debit':
+            valA = Number(a.debit || 0);
+            valB = Number(b.debit || 0);
+            break;
+          case 'kredit':
+            valA = Number(a.kredit || 0);
+            valB = Number(b.kredit || 0);
+            break;
+          default:
+            valA = a[sortConfig.key] ? String(a[sortConfig.key]).toLowerCase() : "";
+            valB = b[sortConfig.key] ? String(b[sortConfig.key]).toLowerCase() : "";
+        }
+
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+      }
+
+      // 2. Default Sort (Date Ascending -> ID Ascending)
+      // Only apply default sort if no custom sort or as tie-breaker?
+      // Actually, user might want to see latest first if they sort desc.
+      // But keeping default logic as fallback is good.
+
       const dateA = new Date(a.tanggal || 0);
       const dateB = new Date(b.tanggal || 0);
 
@@ -242,65 +318,36 @@ export default function InputTransaksiTable({
       filteredData: filtered,
       sortedFiltered: sorted
     };
-  }, [data, search, masterCoaList, projectList]); // ✅ All dependencies for filtering/sorting
+  }, [data, search, masterCoaList, projectList, sortConfig, columnFilters]); // ✅ All dependencies for filtering/sorting
 
   // ✅ ENHANCED: Smart auto-jump using the same filtered data
+  // We use a timestamp tracking to ensure we only jump when the user requested it AND data is ready
   useEffect(() => {
-    if (shouldJumpToLatest && latestTransaksiData && data.length > 0) {
-
-      // ✅ Use the same sortedFiltered data (no duplicate processing)
-      const targetIndex = findTargetTransaksiIndex(sortedFiltered, latestTransaksiData);
-
-      if (targetIndex !== -1) {
-        const targetPage = Math.ceil((targetIndex + 1) / itemsPerPage);
-
-        // Jump to target page
-        if (targetPage !== page) {
-          setPage(targetPage);
-        }
-
-        // Clear search to ensure visibility
-        if (search) {
-          setSearch("");
-        }
-      } else {
-        //
-        // Fallback: jump to last page
-        const totalPages = Math.ceil(sortedFiltered.length / itemsPerPage);
-        if (totalPages > 0) {
-          setPage(totalPages);
-        }
-      }
-
-      // Notify completion
-      if (onJumpCompleted) {
-        setTimeout(() => {
-          onJumpCompleted();
-        }, 300);
-      }
-    }
-  }, [shouldJumpToLatest, latestTransaksiData, sortedFiltered.length, search, itemsPerPage, page, onJumpCompleted]);
-
-  // ✅ HELPER: Find target transaksi index
-  const findTargetTransaksiIndex = (sortedData, targetData) => {
-    if (!targetData) return -1;
-
-    // Try to find by exact ID match
-    if (targetData.id) {
-      const index = sortedData.findIndex(item => item.id === targetData.id);
-      if (index !== -1) return index;
-    }
-
-    // Fallback: find by noTransaksi and date
-    if (targetData.noTransaksi) {
-      return sortedData.findIndex(item =>
-        item.noTransaksi === targetData.noTransaksi &&
-        new Date(item.tanggal).getTime() === new Date(targetData.tanggal).getTime()
+    if (shouldJumpToLatest && latestTransaksiData && sortedFiltered.length > 0) {
+      const targetIndex = sortedFiltered.findIndex(item =>
+        String(item.id) === String(latestTransaksiData.id) ||
+        (item.noTransaksi === latestTransaksiData.noTransaksi)
       );
-    }
 
-    return -1;
-  };
+      if (targetIndex !== -1 && shouldJumpToLatest) {
+        // Found it!
+        const targetPage = Math.ceil((targetIndex + 1) / itemsPerPage);
+        if (page !== targetPage) {
+          console.log("� Jumping to page:", targetPage, "for item:", latestTransaksiData.noTransaksi);
+          setPage(targetPage);
+          // Clear search if it was hiding the item (though sortedFiltered implies it's visible)
+          if (search && !sortedFiltered.some(i => i.id === latestTransaksiData.id)) {
+            setSearch("");
+          }
+
+          if (onJumpCompleted) {
+            // Delay slightly to allow render
+            setTimeout(onJumpCompleted, 500);
+          }
+        }
+      }
+    }
+  }, [shouldJumpToLatest, latestTransaksiData, sortedFiltered, itemsPerPage, onJumpCompleted, page, search]);
 
   // ✅ PAGINATION: Use the memoized sorted data
   const totalPages = Math.ceil(sortedFiltered.length / itemsPerPage);
@@ -361,6 +408,90 @@ export default function InputTransaksiTable({
   }, [paged, saldoAwalPage]);
 
   // ✅ PAGE VALIDATION: Use the memoized sorted data
+  // ✅ AUTO-JUMP to Last Page on Data Load (for new COA selection)
+  useEffect(() => {
+    // Only jump if we have data, pagination is enabled, and we haven't manually set a page yet (or just switched COA)
+    // We can use a simple heuristic: if page is 1 (default) and we have data, jump to last.
+    // However, we need to distinguish between "User clicked First Page" and "Initial Load".
+
+    // Better approach: When selectedCOA changes, we want to jump to the last page once data is loaded.
+    // The `useEffect` below handles page validation. We can modify it.
+
+    if (sortedFiltered.length > 0 && itemsPerPage > 0) {
+      const totalPagesCalc = Math.ceil(sortedFiltered.length / itemsPerPage);
+
+      // Helper to check if this is likely an initial load or COA switch
+      // If we are on page 1, and there are multiple pages, and we just got data... 
+      // But we need to be careful not to override user navigation.
+
+      // Let's rely on the fact that when COA changes, page is usually reset to 1 (or needs to be).
+      // If the user wants "Default to Last Page", we should do it here.
+
+      // Check if we need to adjust page due to filter changes reducing count
+      if (page > totalPagesCalc) {
+        setPage(totalPagesCalc);
+      }
+      // Logic for jumping to last page on load/COA change could be complex to get perfect without extra state.
+      // For now, let's prioritize the user's request: "kalo dropdown di ganti... ga langsung ke last page".
+      // We'll trust that jumping to the last page is the desired default state for this table.
+      else if (page === 1 && totalPagesCalc > 1 && !search && !shouldJumpToLatest) {
+        // Only auto-jump if we are on page 1, have >1 pages, no search active, and not currently doing a specific transaction jump.
+        // This might annoy users who actually want to go to page 1, but for a "Journal/Ledger" view, last page is usually most relevant.
+        // We can add a ref to track if 'initial load' for this COA is done if this is too aggressive.
+
+        // For now, let's try strict ID-based tracking: only jump if COA changed? 
+        // But we don't track previous COA easily here. 
+
+        // Let's assume on data load (e.g. sortedFiltered changes length significantly), we prefer last page?
+        // No, that's bad.
+
+        // Let's look at `localRefresh` or `selectedCOA` dependency in a separate effect.
+      }
+    } else if (sortedFiltered.length === 0) {
+      setPage(1);
+    }
+  }, [sortedFiltered.length, page, itemsPerPage, search, shouldJumpToLatest]);
+
+  // ✅ NEW EFFECT: Force jump to last page when COA changes
+  // We use a ref to store the 'last seen COA' to detect actual changes.
+  const prevCOARef = React.useRef(selectedCOA);
+
+  useEffect(() => {
+    if (prevCOARef.current !== selectedCOA) {
+      // COA changed!
+      prevCOARef.current = selectedCOA;
+      // We can't jump yet because data might not be loaded.
+      // But we can set a flag or just wait for data.
+      // Actually, when COA changes, we can just reset page to 'last' in the render cycle? No, data is async.
+
+      // We'll set page to 1 initially to be safe? Or wait?
+      // Best way: When data arrives and matches this new COA, jump.
+    }
+  }, [selectedCOA]);
+
+  // Combined logic: When filtered data updates, if it looks like a "new" full dataset (not a filter/search), default to last.
+  // Implementation:
+  // If we are on Page 1, and we have Data > 1 page, and !search.
+  // To prevent locking user to Page 1->Last loop, we need a flag "hasJumpedToLastOnLoad".
+
+  const [hasJumpedToLastOnLoad, setHasJumpedToLastOnLoad] = useState(false);
+
+  // Reset flag when COA changes
+  useEffect(() => {
+    setHasJumpedToLastOnLoad(false);
+  }, [selectedCOA]);
+
+  useEffect(() => {
+    if (!hasJumpedToLastOnLoad && sortedFiltered.length > 0 && !search && itemsPerPage > 0) {
+      const total = Math.ceil(sortedFiltered.length / itemsPerPage);
+      if (total > 1) {
+        setPage(total);
+        setHasJumpedToLastOnLoad(true);
+      }
+    }
+  }, [sortedFiltered.length, hasJumpedToLastOnLoad, search, itemsPerPage, selectedCOA]);
+
+  // Standard validation (keep existing but modified)
   useEffect(() => {
     if (sortedFiltered.length > 0 && itemsPerPage > 0) {
       const totalPagesCalc = Math.ceil(sortedFiltered.length / itemsPerPage);
@@ -564,74 +695,138 @@ export default function InputTransaksiTable({
 
   // ...rest of existing code unchanged...
 
+  // ✅ HELPERS FOR SORT/FILTER UI
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  // ✅ RENDER HEADER HELPER (Modified for Compactness)
+  const renderHeader = (label, key, canSort = true, canFilter = true) => {
+    return (
+      <th
+        className="px-2 py-0.5 border relative"
+        style={{ minWidth: (key === 'deskripsi' || key === 'akunTransaksi') ? '150px' : 'auto' }}
+      >
+        <div className="flex items-center justify-between gap-1">
+          <span
+            className={`cursor-pointer select-none flex-1 truncate ${canSort ? 'hover:text-blue-600' : ''}`}
+            onClick={() => canSort && handleSort(key)}
+            title={label}
+          >
+            {label}
+            {sortConfig.key === key && (
+              <span className="ml-1 inline-block align-middle">
+                {sortConfig.direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
+              </span>
+            )}
+          </span>
+
+          {canFilter && (
+            <div className="relative">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveFilterColumn(activeFilterColumn === key ? null : key);
+                }}
+                className={`p-1 rounded hover:bg-gray-200 ${columnFilters[key] ? 'text-blue-600 font-bold' : 'text-gray-400'}`}
+                title="Filter kolom ini"
+              >
+                <Filter size={14} className={columnFilters[key] ? "fill-current" : ""} />
+              </button>
+
+              {/* Filter Dropdown */}
+              {activeFilterColumn === key && (
+                <div
+                  className="absolute right-0 top-full mt-1 w-48 bg-white border rounded shadow-lg z-50 p-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="mb-2 text-xs font-semibold text-gray-600 uppercase">Filter {label}</div>
+                  <div className="flex gap-1 mb-2">
+                    <input
+                      autoFocus
+                      type="text"
+                      className="w-full border rounded px-2 py-1 text-sm text-black"
+                      placeholder={`Cari ${label}...`}
+                      value={columnFilters[key] || ''}
+                      onChange={(e) => setColumnFilters({ ...columnFilters, [key]: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex justify-between">
+                    <button
+                      onClick={() => {
+                        const newFilters = { ...columnFilters };
+                        delete newFilters[key];
+                        setColumnFilters(newFilters);
+                        setActiveFilterColumn(null); // Close after reset? Or keep open?
+                      }}
+                      className="text-xs text-red-500 hover:text-red-700 flex items-center"
+                    >
+                      <RotateCcw size={12} className="mr-1" /> Reset
+                    </button>
+                    <button
+                      onClick={() => setActiveFilterColumn(null)}
+                      className="text-xs text-blue-500 hover:text-blue-700"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </th>
+    );
+  };
+
   return (
     <div
-      className="rounded shadow p-4 mt-8"
+      className="w-full rounded shadow px-2 py-0.5 mt-2 overflow-x-auto"
       style={{
-        background: theme.cardColor,
+        background: theme.formColor,
         color: theme.fontColor,
         fontFamily: theme.fontFamily,
+        minHeight: '300px' // Reduced min-height
       }}
     >
       <div className="flex justify-between items-center mb-2">
-        <h2
-          className="text-lg font-bold"
-          style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}
-        >
-          Data Transaksi{selectedCOA ? ` - ${getSelectedCoaName()}` : ""}
-        </h2>
-        <div
-          className="text-sm px-3 py-1 rounded"
-          style={{
-            background: theme.fieldColor,
-            color: theme.fontColor,
-            fontFamily: theme.fontFamily,
-          }}
-        >
-          💡 Double-click row untuk edit transaksi
+        <div className="flex items-center gap-2">
+          <h2
+            className="text-sm font-bold"
+            style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}
+          >
+            Data Transaksi{selectedCOA ? ` - ${getSelectedCoaName()}` : ""}
+          </h2>
+          <span className="text-xs opacity-50 select-none" style={{ color: theme.fontColor }}>
+            (Double-click row untuk edit)
+          </span>
         </div>
-      </div>
 
-      {selectedCOA ? (
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-2">
-          <input
-            type="text"
-            placeholder="Cari..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="border px-3 py-2 rounded w-full md:w-64"
-            style={{
-              background: theme.fieldColor,
-              color: theme.fontColor,
-              fontFamily: theme.fontFamily,
-            }}
-          />
+        {selectedCOA && (
           <div className="flex gap-2">
             <button
               onClick={handlePrint}
-              style={{
-                background: theme.buttonSimpan,
-                color: "#fff",
-                fontFamily: theme.fontFamily,
-              }}
-              className="px-4 py-2 rounded"
+              style={{ background: theme.buttonSimpan, color: "#fff", fontFamily: theme.fontFamily }}
+              className="px-3 py-1 rounded text-xs shadow-sm"
             >
               Print
             </button>
             <button
               onClick={handleExportExcel}
-              style={{
-                background: theme.buttonEdit,
-                color: "#fff",
-                fontFamily: theme.fontFamily,
-              }}
-              className="px-4 py-2 rounded"
+              style={{ background: theme.buttonUpdate, color: "#fff", fontFamily: theme.fontFamily }}
+              className="px-3 py-1 rounded text-xs shadow-sm"
             >
               Export Excel
             </button>
           </div>
-        </div>
-      ) : (
+        )}
+      </div>
+
+      {!selectedCOA && (
         <div
           className="text-center mb-4 p-4 rounded"
           style={{
@@ -646,41 +841,41 @@ export default function InputTransaksiTable({
 
       <div className="overflow-x-auto">
         <table
-          className="min-w-full border text-sm"
+          className="min-w-full border text-xs"
           style={{
             fontFamily: theme.tableFontFamily,
           }}
         >
           <thead>
             <tr style={{ background: theme.tableHeaderColor, color: theme.tableFontColor }}>
-              <th className="p-2 border">No</th>
-              <th className="p-2 border">Tanggal</th>
-              <th className="p-2 border">COA Akun Bank</th>
-              <th className="p-2 border">Akun Transaksi</th>
-              <th className="p-2 border">Deskripsi</th>
-              <th className="p-2 border">Debit</th>
-              <th className="p-2 border">Kredit</th>
-              <th className="p-2 border">Balance</th>
-              <th className="p-2 border">Nomor Transaksi</th>
-              <th className="p-2 border">Project No</th>
-              <th className="p-2 border">Project Name</th>
-              <th className="p-2 border">Jurnal</th>
+              {renderHeader("No", "id", true, false)}
+              {renderHeader("Tanggal", "tanggal")}
+              {renderHeader("COA Akun Bank", "coaAkunBank")}
+              {renderHeader("Akun Transaksi", "akunTransaksi")}
+              {renderHeader("Deskripsi", "deskripsi")}
+              {renderHeader("Debit", "debit")}
+              {renderHeader("Kredit", "kredit")}
+              <th className="px-2 py-0.5 border">Balance</th>
+              {renderHeader("No Transaksi", "noTransaksi")}
+              {renderHeader("Project No", "projectNo")}
+              {renderHeader("Project Name", "projectName")}
+              <th className="px-2 py-0.5 border">Jurnal</th>
             </tr>
           </thead>
           <tbody>
             {selectedCOA && (
-              <tr style={{ background: theme.cardColor, color: theme.fontColor }}>
-                <td className="p-2 border text-center" colSpan={8}>
+              <tr className="text-xs leading-none" style={{ background: theme.cardColor, color: theme.fontColor }}>
+                <td className="px-2 py-0.5 border text-center font-bold" colSpan={7}>
                   Saldo Awal
                 </td>
-                <td className="p-2 border text-right">
+                <td className="px-2 py-0.5 border text-right font-bold">
                   {saldoAwalPage && !isNaN(saldoAwalPage) ? saldoAwalPage.toLocaleString() : '0'}
                 </td>
-                <td className="p-2 border" colSpan={3}></td>
+                <td className="px-2 py-0.5 border" colSpan={4}></td>
               </tr>
             )}
             {!selectedCOA ? (
-              <tr>
+              <tr className="text-xs">
                 <td colSpan={12} className="text-center p-8" style={{ color: theme.fontColor }}>
                   <div className="flex flex-col items-center space-y-2">
                     <div className="text-4xl">📋</div>
@@ -690,7 +885,7 @@ export default function InputTransaksiTable({
                 </td>
               </tr>
             ) : paged.length === 0 ? (
-              <tr>
+              <tr className="text-xs">
                 <td colSpan={12} className="text-center p-4" style={{ color: theme.fontColor }}>
                   {data.length === 0 ? (
                     <>
@@ -716,7 +911,7 @@ export default function InputTransaksiTable({
                 return (
                   <tr
                     key={row.id}
-                    className="hover:bg-indigo-50 cursor-pointer transition-colors"
+                    className="hover:bg-indigo-50 cursor-pointer transition-colors text-xs leading-none"
                     style={{
                       background: theme.tableBodyColor,
                       color: theme.tableFontColor,
@@ -729,34 +924,34 @@ export default function InputTransaksiTable({
                     }}
                     title="Double-click untuk edit transaksi"
                   >
-                    <td className="p-2 border">{globalNo}</td>
-                    <td className="p-2 border">{formatDateDMY(row.tanggal)}</td>
-                    <td className="p-2 border">{getCoaName(row.coaAkunBank)}</td>
-                    <td className="p-2 border">{getAkunTransaksiName(row.akunTransaksi)}</td>
-                    <td className="p-2 border">{row.deskripsi}</td>
-                    <td className="p-2 border text-right">
+                    <td className="px-2 py-0.5 border text-center" style={{ width: '40px' }}>{globalNo}</td>
+                    <td className="px-2 py-0.5 border whitespace-nowrap">{formatDateDMY(row.tanggal)}</td>
+                    <td className="px-2 py-0.5 border truncate max-w-[150px]" title={getCoaName(row.coaAkunBank)}>{getCoaName(row.coaAkunBank)}</td>
+                    <td className="px-2 py-0.5 border truncate max-w-[200px]" title={getAkunTransaksiName(row.akunTransaksi)}>{getAkunTransaksiName(row.akunTransaksi)}</td>
+                    <td className="px-2 py-0.5 border truncate max-w-[200px]" title={row.deskripsi}>{row.deskripsi}</td>
+                    <td className="px-2 py-0.5 border text-right">
                       {row.debit && !isNaN(row.debit) && Number(row.debit) > 0 ? Number(row.debit).toLocaleString() : '-'}
                     </td>
-                    <td className="p-2 border text-right">
+                    <td className="px-2 py-0.5 border text-right">
                       {row.kredit && !isNaN(row.kredit) && Number(row.kredit) > 0 ? Number(row.kredit).toLocaleString() : '-'}
                     </td>
-                    <td className="p-2 border text-right">{calculateBalances[row.id] && !isNaN(calculateBalances[row.id]) ? calculateBalances[row.id].toLocaleString() : '0'}</td>
-                    <td className="p-2 border">{row.noTransaksi}</td>
-                    <td className="p-2 border">{row.projectNo}</td>
-                    <td className="p-2 border">{getProjectName(row.projectNo)}</td>
-                    <td className="p-2 border text-center">
-                      <button
+                    <td className="px-2 py-0.5 border text-right">{calculateBalances[row.id] && !isNaN(calculateBalances[row.id]) ? calculateBalances[row.id].toLocaleString() : '0'}</td>
+                    <td className="px-2 py-0.5 border whitespace-nowrap">{row.noTransaksi}</td>
+                    <td className="px-2 py-0.5 border">{row.projectNo}</td>
+                    <td className="px-2 py-0.5 border truncate max-w-[150px]">{getProjectName(row.projectNo)}</td>
+                    <td className="p-0 border text-center align-middle">
+                      <span
                         onClick={(e) => {
                           e.stopPropagation();
                           setJournalNomorTransaksi(row.noTransaksi);
                           setShowJournalModal(true);
                         }}
-                        className="p-1 rounded hover:bg-gray-200 transition-colors"
+                        className="text-[14px] hover:underline leading-none px-1"
                         title="Lihat Jurnal"
                         style={{ color: theme.buttonEdit || '#4f46e5' }}
                       >
-                        <ViewIcon sx={{ fontSize: 18 }} />
-                      </button>
+                        Lihat
+                      </span>
                     </td>
                   </tr>
                 );
@@ -774,34 +969,130 @@ export default function InputTransaksiTable({
       />
 
       {selectedCOA && paged.length > 0 && (
-        <div className="flex justify-between items-center mt-4">
-          <span className="text-sm" style={{ color: theme.fontColor }}>
-            Page {page} of {totalPages || 1}
-          </span>
-          <div className="space-x-2">
+        <div className="flex flex-col md:flex-row justify-between items-center mt-6 gap-4">
+
+          {/* Left Side: Show Rows */}
+          <div className="flex items-center text-sm" style={{ color: theme.fontColor }}>
+            <span className="mr-2">Show</span>
+            <select
+              value={itemsPerPage}
+              disabled // Fixed to 10 for now as per code logic, logic needs update to support dynamic var but user didn't ask for that yet.
+              className="border rounded px-2 py-1 mx-1"
+              style={{ background: theme.fieldColor, color: theme.fontColor }}
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+            <span className="ml-2">rows per page</span>
+            <span className="ml-4 text-gray-500">
+              Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, sortedFiltered.length)} of {sortedFiltered.length} records
+            </span>
+          </div>
+
+          {/* Right Side: Pagination Controls */}
+          <div className="flex items-center space-x-1">
+            {/* First Page */}
             <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              onClick={() => setPage(1)}
               disabled={page === 1}
+              className={`px-3 py-1 rounded border ${page === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-100'}`}
               style={{
-                background: theme.buttonRefresh,
-                color: "#fff",
-                fontFamily: theme.fontFamily,
+                borderColor: theme.borderColor || '#d1d5db',
+                color: theme.buttonEdit || '#3b82f6',
+                background: theme.cardColor
               }}
-              className="px-3 py-1 rounded border disabled:opacity-50"
+              title="First Page"
             >
-              Prev
+              «
             </button>
+
+            {/* Prev Page */}
             <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages || totalPages === 0}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className={`px-3 py-1 rounded border ${page === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-100'}`}
               style={{
-                background: theme.buttonSimpan,
-                color: "#fff",
-                fontFamily: theme.fontFamily,
+                borderColor: theme.borderColor || '#d1d5db',
+                color: theme.buttonEdit || '#3b82f6',
+                background: theme.cardColor
               }}
-              className="px-3 py-1 rounded border disabled:opacity-50"
+              title="Previous"
             >
-              Next
+              ‹
+            </button>
+
+            {/* Page Numbers */}
+            {(() => {
+              const pages = [];
+              const maxVisible = 5;
+              let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+              let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+
+              if (endPage - startPage + 1 < maxVisible) {
+                startPage = Math.max(1, endPage - maxVisible + 1);
+              }
+
+              if (startPage > 1) {
+                pages.push(
+                  <span key="dots-start" className="px-2">...</span>
+                );
+              }
+
+              for (let i = startPage; i <= endPage; i++) {
+                pages.push(
+                  <button
+                    key={i}
+                    onClick={() => setPage(i)}
+                    className={`px-3 py-1 rounded border ${page === i ? 'font-bold' : 'hover:bg-blue-50'}`}
+                    style={{
+                      background: page === i ? (theme.buttonEdit || '#3b82f6') : theme.cardColor,
+                      color: page === i ? '#fff' : (theme.fontColor),
+                      borderColor: theme.buttonEdit || '#3b82f6'
+                    }}
+                  >
+                    {i}
+                  </button>
+                );
+              }
+
+              if (endPage < totalPages) {
+                pages.push(
+                  <span key="dots-end" className="px-2">...</span>
+                );
+              }
+
+              return pages;
+            })()}
+
+            {/* Next Page */}
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className={`px-3 py-1 rounded border ${page === totalPages ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-100'}`}
+              style={{
+                borderColor: theme.borderColor || '#d1d5db',
+                color: theme.buttonEdit || '#3b82f6',
+                background: theme.cardColor
+              }}
+              title="Next"
+            >
+              ›
+            </button>
+
+            {/* Last Page */}
+            <button
+              onClick={() => setPage(totalPages)}
+              disabled={page === totalPages}
+              className={`px-3 py-1 rounded border ${page === totalPages ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-100'}`}
+              style={{
+                borderColor: theme.borderColor || '#d1d5db',
+                color: theme.buttonEdit || '#3b82f6',
+                background: theme.cardColor
+              }}
+              title="Last Page"
+            >
+              »
             </button>
           </div>
         </div>

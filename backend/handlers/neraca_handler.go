@@ -15,6 +15,7 @@ import (
 // GET /api/laporan/neraca?end_date=2024-12-31
 func GetNeraca(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		endDate := c.Query("end_date")
 
 		if endDate == "" {
@@ -36,6 +37,7 @@ func GetNeraca(db *gorm.DB) gin.HandlerFunc {
 // GET /api/laporan/neraca-komparatif?start_year=2019&end_year=2023
 func GetNeracaKomparatif(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		startYearStr := c.Query("start_year")
 		endYearStr := c.Query("end_year")
 

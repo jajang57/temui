@@ -34,6 +34,7 @@ type ArusKasResponse struct {
 // GetLaporanArusKas menangani permintaan laporan arus kas metode tidak langsung
 func GetLaporanArusKas(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		startDateStr := c.Query("start_date")
 		endDateStr := c.Query("end_date")
 

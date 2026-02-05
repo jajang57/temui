@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"project-akuntansi-backend/models"
 
@@ -11,15 +12,22 @@ import (
 // GET /api/gl
 func GetGLs(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		nomorTransaksi := c.Query("nomor_transaksi")
 		var gls []models.GL
+
 		query := db
 		if nomorTransaksi != "" {
 			query = query.Where("nomor_transaksi = ?", nomorTransaksi)
 		}
+
 		if err := query.Find(&gls).Error; err != nil {
+			fmt.Printf("[ERROR] GetGLs failed: %v\n", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
+		}
+		if nomorTransaksi != "" {
+			fmt.Printf("[DEBUG] GetGLs: nomor_transaksi='%s', found %d records\n", nomorTransaksi, len(gls))
 		}
 		c.JSON(http.StatusOK, gls)
 	}
@@ -28,6 +36,7 @@ func GetGLs(db *gorm.DB) gin.HandlerFunc {
 // POST /api/gl
 func CreateGL(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		var input models.GL
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -44,6 +53,7 @@ func CreateGL(db *gorm.DB) gin.HandlerFunc {
 // PUT /api/gl/:id
 func UpdateGL(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		id := c.Param("id")
 		var gl models.GL
 		if err := db.First(&gl, id).Error; err != nil {
@@ -66,6 +76,7 @@ func UpdateGL(db *gorm.DB) gin.HandlerFunc {
 // DELETE /api/gl/:id
 func DeleteGL(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		id := c.Param("id")
 		if err := db.Unscoped().Delete(&models.GL{}, id).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

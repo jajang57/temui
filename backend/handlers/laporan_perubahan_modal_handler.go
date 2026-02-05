@@ -25,6 +25,7 @@ type PerubahanModalResponse struct {
 // GetLaporanPerubahanModal handles report for Statement of Changes in Equity
 func GetLaporanPerubahanModal(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		startDate := c.Query("start_date")
 		endDate := c.Query("end_date")
 

@@ -11,6 +11,7 @@ import (
 
 func GetTrialBalance(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		tahunStr := c.Query("tahun")
 		bulanAwalStr := c.Query("bulan_awal")
 		bulanAkhirStr := c.Query("bulan_akhir")

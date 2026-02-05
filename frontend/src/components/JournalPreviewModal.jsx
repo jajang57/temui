@@ -21,6 +21,16 @@ const JournalPreviewModal = ({ open, onClose, nomorTransaksi, title = "Journal P
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [coaList, setCoaList] = useState([]);
+
+    // Fetch Master COA for name resolution
+    useEffect(() => {
+        api.get("/master-coa")
+            .then(res => {
+                setCoaList(res.data.data || res.data || []);
+            })
+            .catch(err => console.error("Error fetching master COA:", err));
+    }, []);
 
     useEffect(() => {
         if (open && nomorTransaksi) {
@@ -40,6 +50,12 @@ const JournalPreviewModal = ({ open, onClose, nomorTransaksi, title = "Journal P
         } finally {
             setLoading(false);
         }
+    };
+
+    const getCoaName = (kode) => {
+        if (!kode || coaList.length === 0) return kode;
+        const found = coaList.find(c => String(c.kode) === String(kode));
+        return found ? `(${found.kode}) ${found.nama}` : kode;
     };
 
     const totalDebit = data.reduce((sum, item) => sum + (item.debit || 0), 0);
@@ -112,7 +128,7 @@ const JournalPreviewModal = ({ open, onClose, nomorTransaksi, title = "Journal P
                                             <TableCell sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                                                 {row.nomorJurnal || '-'}
                                             </TableCell>
-                                            <TableCell>{row.akunTransaksi}</TableCell>
+                                            <TableCell>{getCoaName(row.akunTransaksi)}</TableCell>
                                             <TableCell>{row.deskripsi}</TableCell>
                                             <TableCell align="right">
                                                 {row.debit > 0 ? row.debit.toLocaleString('id-ID', { minimumFractionDigits: 2 }) : '-'}

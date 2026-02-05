@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import api from "../../utils/api";
-import { useTheme } from "../../context/ThemeContext"; // pastikan sudah ada
+import { useTheme } from "../../context/ThemeContext";
 
 export default function MasterCOA() {
   const { theme } = useTheme();
-  const [form, setForm] = useState({ kode: "", nama: "", masterCategoryCOAId: "", saldoAwal: "", cashflowActivity: "", cashflowDirection: "" });
+  const [form, setForm] = useState({ kode: "", nama: "", masterCategoryCOAId: "", saldoAwal: "", cashflowActivity: "", cashflowDirection: "", tanggalSaldoAwal: new Date().toISOString().split('T')[0], contraAccountKode: "" });
   const [data, setData] = useState([]);
   const [kategoriList, setKategoriList] = useState([]);
   const [error, setError] = useState("");
@@ -102,6 +102,8 @@ export default function MasterCOA() {
       ...form,
       masterCategoryCOAId: Number(form.masterCategoryCOAId),
       saldoAwal: form.saldoAwal ? parseFloat(unformatNumber(form.saldoAwal)) : 0,
+      tanggalSaldoAwal: form.tanggalSaldoAwal,
+      contraAccountKode: form.contraAccountKode,
     };
 
     console.log("Payload yang dikirim:", payload); // Debug log
@@ -170,7 +172,8 @@ export default function MasterCOA() {
     // Jika pilih No, tidak terjadi apa-apa
   };
 
-  const handleEdit = (row) => {
+  const handleEdit = async (row) => {
+    // Set basic form fields first
     setForm({
       kode: row.kode,
       nama: row.nama,
@@ -178,9 +181,41 @@ export default function MasterCOA() {
       saldoAwal: row.saldoAwal?.toString() || "",
       cashflowActivity: row.cashflowActivity || "",
       cashflowDirection: row.cashflowDirection || "",
+      tanggalSaldoAwal: new Date().toISOString().split('T')[0], // Default to today
+      contraAccountKode: "", // Will be populated from GL if exists
     });
     setFormattedSaldoAwal(row.saldoAwal ? formatNumber(row.saldoAwal) : "");
     setEditId(row.id);
+
+    // Fetch opening balance journal from GL to get tanggal and contra account
+    if (row.saldoAwal && row.saldoAwal !== 0) {
+      try {
+        const response = await api.get('/gl');
+        const trxNo = `OPBAL/${row.kode}`;
+
+        // Find GL entries for this opening balance
+        const openingBalanceEntries = response.data.filter(gl => gl.nomorTransaksi === trxNo);
+
+        if (openingBalanceEntries.length > 0) {
+          // Get tanggal from first entry
+          const tanggal = openingBalanceEntries[0].tanggal;
+
+          // Find contra account (the account that's not the current account)
+          const contraEntry = openingBalanceEntries.find(gl => gl.akunTransaksi !== row.kode);
+          const contraKode = contraEntry ? contraEntry.akunTransaksi : "";
+
+          // Update form with GL data
+          setForm(prev => ({
+            ...prev,
+            tanggalSaldoAwal: tanggal ? tanggal.split('T')[0] : new Date().toISOString().split('T')[0],
+            contraAccountKode: contraKode,
+          }));
+        }
+      } catch (error) {
+        console.log("Could not fetch GL data for opening balance:", error);
+        // Continue with default values if GL fetch fails
+      }
+    }
   };
 
   const handleFilter = (e) => {
@@ -250,7 +285,7 @@ export default function MasterCOA() {
 
   // Fungsi untuk kosongkan/reset form
   const handleResetForm = () => {
-    setForm({ kode: "", nama: "", masterCategoryCOAId: "", saldoAwal: "", cashflowActivity: "", cashflowDirection: "" });
+    setForm({ kode: "", nama: "", masterCategoryCOAId: "", saldoAwal: "", cashflowActivity: "", cashflowDirection: "", tanggalSaldoAwal: new Date().toISOString().split('T')[0], contraAccountKode: "" });
     setFormattedSaldoAwal("");
     setEditId(null);
     setError("");
@@ -448,9 +483,9 @@ export default function MasterCOA() {
   };
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-2xl font-bold tracking-tight mb-4" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>Master COA</h1>
-      <div className="flex flex-col md:flex-row gap-8">
+    <div className="flex flex-col h-[calc(100vh-140px)] space-y-4">
+      <h1 className="text-2xl font-bold tracking-tight mb-4 flex-none" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>Master COA</h1>
+      <div className="flex-1 flex flex-col md:flex-row gap-8 min-h-0">
         <form
           onSubmit={handleSubmit}
           className="rounded-xl shadow-lg p-6 w-full max-w-md border"
@@ -590,6 +625,52 @@ export default function MasterCOA() {
               />
             </div>
 
+            {/* Konfigurasi Jurnal Saldo Awal (Muncul jika ada Saldo Awal) */}
+            {parseFloat(unformatNumber(formattedSaldoAwal)) !== 0 && formattedSaldoAwal !== "" && (
+              <div className="p-3 rounded-lg border space-y-3" style={{ borderColor: theme.border, background: theme.bgSecondary }}>
+                <h3 className="font-semibold text-sm uppercase tracking-wider" style={{ color: theme.fontColor }}>
+                  Konfigurasi Jurnal Saldo Awal
+                </h3>
+
+                <div>
+                  <label className="block mb-1 text-sm font-medium" style={{ color: theme.fontColor }}>
+                    Tanggal Saldo Awal (Cut-off)
+                  </label>
+                  <input
+                    type="date"
+                    name="tanggalSaldoAwal"
+                    value={form.tanggalSaldoAwal}
+                    onChange={handleChange}
+                    className="w-full border rounded-lg px-3 py-2 text-sm transition"
+                    style={{ background: theme.fieldColor, color: theme.fontColor }}
+                  />
+                </div>
+
+                <div>
+                  <label className="block mb-1 text-sm font-medium" style={{ color: theme.fontColor }}>
+                    Akun Penyeimbang (Lawan Jurnal)
+                  </label>
+                  <select
+                    name="contraAccountKode"
+                    value={form.contraAccountKode}
+                    onChange={handleChange}
+                    className="w-full border rounded-lg px-3 py-2 text-sm transition"
+                    style={{ background: theme.fieldColor, color: theme.fontColor }}
+                  >
+                    <option value="">-- Pilih Akun Penyeimbang --</option>
+                    {data.map(coa => (
+                      <option key={coa.id} value={coa.kode}>
+                        {coa.kode} - {coa.nama}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs mt-1 text-gray-500">
+                    Biasanya akun <strong>Modal / Ekuitas</strong> (Tipe 3) atau <strong>Historical Balancing</strong>.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Cashflow Mapping Section */}
             <div className="p-3 rounded-lg border" style={{ borderColor: theme.border, background: theme.bgSecondary }}>
               <h3 className="font-semibold mb-3 text-sm uppercase tracking-wider" style={{ color: theme.fontColor }}>Mapping Arus Kas</h3>
@@ -662,8 +743,8 @@ export default function MasterCOA() {
             </div>
           </div>
         </form>
-        <div className="flex-1">
-          <div className="flex flex-col md:flex-row md:items-center gap-2 mb-4">
+        <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex-none flex flex-col md:flex-row md:items-center gap-2 mb-4">
             <input
               type="text"
               placeholder="Cari kode/nama/kategori..."
@@ -689,349 +770,380 @@ export default function MasterCOA() {
               Print
             </button>
           </div>
-          <div ref={tableRef} style={{ maxHeight: '500px', overflowY: 'auto' }}>
-            <table className="w-full border rounded-lg text-sm shadow-sm" style={{ fontFamily: theme.tableFontFamily }}>
-              <thead>
-                <tr style={{ background: theme.tableHeaderColor, color: theme.tableFontColor }}>
-                  <th className="px-3 py-2 font-semibold border-b">Kode</th>
-                  <th className="px-3 py-2 font-semibold border-b">Nama</th>
-                  <th className="px-3 py-2 font-semibold border-b">Kategori</th>
-                  <th className="px-3 py-2 font-semibold border-b">Arus Kas</th>
-                  <th className="px-3 py-2 font-semibold border-b">Saldo Awal</th>
-                  <th className="px-3 py-2 font-semibold border-b">Aksi</th>
-                </tr>
-                <tr>
-                  <th className="px-3 py-1 border-b">
-                    <input
-                      type="text"
-                      value={filterKode}
-                      onChange={e => { setFilterKode(e.target.value); setPage(0); }}
-                      className="w-full border rounded px-2 py-1 text-xs"
-                      placeholder="Filter kode"
-                      style={{
-                        background: theme.fieldColor,
-                        color: theme.fontColor,
-                        fontFamily: theme.fontFamily,
-                      }}
-                    />
-                  </th>
-                  <th className="px-3 py-1 border-b">
-                    <input
-                      type="text"
-                      value={filterNama}
-                      onChange={e => { setFilterNama(e.target.value); setPage(0); }}
-                      className="w-full border rounded px-2 py-1 text-xs"
-                      placeholder="Filter nama"
-                      style={{
-                        background: theme.fieldColor,
-                        color: theme.fontColor,
-                        fontFamily: theme.fontFamily,
-                      }}
-                    />
-                  </th>
-                  <th className="px-3 py-1 border-b">
-                    <input
-                      type="text"
-                      value={filterKategori}
-                      onChange={e => { setFilterKategori(e.target.value); setPage(0); }}
-                      className="w-full border rounded px-2 py-1 text-xs"
-                      placeholder="Filter kategori"
-                      style={{
-                        background: theme.fieldColor,
-                        color: theme.fontColor,
-                        fontFamily: theme.fontFamily,
-                      }}
-                    />
-                  </th>
-                  <th className="px-3 py-1 border-b"></th> {/* Maps Column filter placeholder */}
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {pagedData.map((row) =>
-                  row.isHeader ? (
-                    <tr key={"header-" + row.kategori} style={{ background: theme.cardColor }}>
-                      <td colSpan={6} className="px-3 py-2 font-bold border-b" style={{ color: theme.fontColor }}>
-                        {row.kategori}
-                      </td>
-                    </tr>
-                  ) : (
-                    <tr key={row.id} className="border-b last:border-b-0" style={{ background: theme.tableBodyColor, color: theme.tableFontColor }}>
-                      <td className="px-3 py-2">{row.kode}</td>
-                      <td className="px-3 py-2">{row.nama}</td>
-                      <td className="px-3 py-2">
-                        {row.masterCategoryCOA
-                          ? `${row.masterCategoryCOA.kode} - ${row.masterCategoryCOA.nama} (${row.masterCategoryCOA.tipeAkun})`
-                          : "-"
-                        }
-                      </td>
-                      <td className="px-3 py-2">
-                        {row.cashflowActivity ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800" title="Override Manual">
-                            {row.cashflowActivity.charAt(0).toUpperCase() + row.cashflowActivity.slice(1)}
-                            {row.cashflowDirection ? ` (${row.cashflowDirection})` : ''}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600" title="Ditentukan Otomatis oleh Sistem">
-                            Auto
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        {row.saldoAwal !== undefined && row.saldoAwal !== null
-                          ? formatNumber(row.saldoAwal)
-                          : "-"}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleEdit(row)}
-                            className="px-3 py-1 rounded-lg font-semibold transition text-sm"
-                            style={{
-                              background: theme.buttonEdit,
-                              color: "#fff",
-                              fontFamily: theme.fontFamily,
-                            }}
-                            title="Edit COA"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDelete(row)}
-                            className="px-3 py-1 rounded-lg font-semibold transition text-sm"
-                            style={{
-                              background: theme.buttonHapus,
-                              color: "#fff",
-                              fontFamily: theme.fontFamily,
-                            }}
-                            title="Hapus COA"
-                          >
-                            Hapus
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div >
-      {showModalKategori && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40" >
-          <div className="rounded-xl p-6 shadow-lg w-full max-w-6xl" style={{ background: theme.formColor }}>
-            <h2 className="text-lg font-bold mb-4" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
-              {editKategoriId ? 'Edit Kategori COA' : 'Tambah Kategori COA'}
-            </h2>
-            <div className="flex flex-row gap-8">
-              {/* Form Input */}
-              <form
-                style={{ background: theme.cardColor }}
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  setLoadingKategori(true);
-                  try {
-                    if (editKategoriId) {
-                      // Edit mode
-                      await api.put(`/master-category-coa/${editKategoriId}`, formKategori);
-                    } else {
-                      // Insert mode
-                      await api.post("/master-category-coa", formKategori);
-                    }
-                    const kategoriRes = await api.get("/master-category-coa");
-                    const sortedKategori = kategoriRes.data.sort((a, b) => parseInt(a.tipeAkun, 10) - parseInt(b.tipeAkun, 10));
-                    setKategoriList(sortedKategori);
-                    setForm(prev => ({ ...prev, masterCategoryCOAId: editKategoriId ? editKategoriId.toString() : kategoriRes.data[kategoriRes.data.length - 1].id.toString() }));
-                    setShowModalKategori(false);
-                    setFormKategori({ kode: "", nama: "", tipeAkun: "", isKasBank: false });
-                    setEditKategoriId(null);
-                  } catch (err) {
-                    alert("Gagal simpan kategori!");
-                  }
-                  setLoadingKategori(false);
-                }}
-                className="space-y-4 w-1/3 p-4 rounded-lg"
-              >
-                <div>
-                  <label className="block mb-1 font-semibold" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
-                    Kode
-                  </label>
-                  <input
-                    type="text"
-                    value={formKategori.kode}
-                    onChange={e => setFormKategori(f => ({ ...f, kode: e.target.value }))}
-                    className="w-full border rounded-lg px-3 py-2 transition"
-                    required
-                    style={{
-                      background: theme.fieldColor,
-                      color: theme.fontColor,
-                      fontFamily: theme.fontFamily,
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="block mb-1 font-semibold" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
-                    Nama
-                  </label>
-                  <input
-                    type="text"
-                    value={formKategori.nama}
-                    onChange={e => setFormKategori(f => ({ ...f, nama: e.target.value }))}
-                    className="w-full border rounded-lg px-3 py-2 transition"
-                    required
-                    style={{
-                      background: theme.fieldColor,
-                      color: theme.fontColor,
-                      fontFamily: theme.fontFamily,
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="block mb-1 font-semibold" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
-                    Tipe Akun
-                  </label>
-                  <select
-                    value={formKategori.tipeAkun}
-                    onChange={e => setFormKategori(f => ({ ...f, tipeAkun: e.target.value }))}
-                    className="w-full border rounded-lg px-3 py-2 transition"
-                    required
-                    style={{
-                      background: theme.fieldColor,
-                      color: theme.fontColor,
-                      fontFamily: theme.fontFamily,
-                    }}
-                  >
-                    <option value="">Pilih Tipe Akun</option>
-                    {Object.entries(tipeAkunMap).map(([key, val]) => (
-                      <option key={key} value={key}>{val}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={formKategori.isKasBank || false}
-                    onChange={e => setFormKategori(f => ({ ...f, isKasBank: e.target.checked }))}
-                    id="isKasBank"
-                    className="rounded"
-                  />
-                  <label htmlFor="isKasBank" className="font-semibold" style={{
-                    color: theme.fontColor,
-                    fontFamily: theme.fontFamily,
-                  }}>Akun Kas & Bank</label>
-                </div>
-                <div className="flex gap-2 justify-end mt-4">
-                  <button
-                    type="button"
-                    className="px-4 py-2 rounded-lg font-semibold transition"
-                    style={{
-                      background: theme.buttonRefresh,
-                      color: "#fff",
-                      fontFamily: theme.fontFamily,
-                    }}
-                    onClick={() => {
-                      setShowModalKategori(false);
-                      setFormKategori({ kode: "", nama: "", tipeAkun: "", isKasBank: false });
-                      setEditKategoriId(null);
-                    }}
-                    disabled={loadingKategori}
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-lg font-semibold transition"
-                    style={{
-                      background: theme.buttonSimpan,
-                      color: "#fff",
-                      fontFamily: theme.fontFamily,
-                    }}
-                    disabled={loadingKategori}
-                  >
-                    {loadingKategori ? 'Menyimpan...' : (editKategoriId ? 'Update' : 'Simpan')}
-                  </button>
-                </div>
-              </form>
-              {/* Tabel Kategori */}
-              <div className="w-2/3 rounded-lg" style={{ maxHeight: 400, overflowY: "auto", background: theme.cardColor }}>
-                <table className="w-full border rounded-lg text-sm shadow-sm" style={{ fontFamily: theme.tableFontFamily }}>
-                  <thead>
-                    <tr style={{ background: theme.tableHeaderColor, color: theme.tableFontColor }}>
-                      <th className="px-3 py-2 font-semibold border-b">Kode</th>
-                      <th className="px-3 py-2 font-semibold border-b">Nama</th>
-                      <th className="px-3 py-2 font-semibold border-b">Tipe Akun</th>
-                      <th className="px-3 py-2 font-semibold border-b">Kas & Bank</th>
-                      <th className="px-3 py-2 font-semibold border-b">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...kategoriList]
-                      .sort((a, b) => parseInt(a.tipeAkun, 10) - parseInt(b.tipeAkun, 10))
-                      .map((kat) => (
-                        <tr key={kat.id} style={{ background: theme.tableBodyColor, color: theme.tableFontColor }}>
-                          <td className="px-3 py-2">{kat.kode}</td>
-                          <td className="px-3 py-2">{kat.nama}</td>
-                          <td className="px-3 py-2">{tipeAkunMap[kat.tipeAkun] || kat.tipeAkun}</td>
-                          <td className="px-3 py-2 text-center">{kat.isKasBank ? "✔" : ""}</td>
-                          <td className="px-3 py-2 flex gap-2">
+          {/* Custom table with fixed header and scrollable body */}
+          <div ref={tableRef} className="flex-1 flex flex-col overflow-hidden border rounded-lg shadow-sm bg-white">
+            {/* Fixed Header */}
+            <div className="flex-none overflow-hidden">
+              <table className="w-full text-sm" style={{ fontFamily: theme.tableFontFamily, tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '120px' }} />
+                  <col style={{ width: 'auto' }} />
+                  <col style={{ width: '300px' }} />
+                  <col style={{ width: '150px' }} />
+                  <col style={{ width: '150px' }} />
+                  <col style={{ width: '150px' }} />
+                  <col style={{ width: '17px' }} /> {/* Scrollbar compensation */}
+                </colgroup>
+                <thead>
+                  <tr style={{ background: theme.tableHeaderColor, color: theme.tableFontColor }}>
+                    <th className="px-3 py-2 font-semibold border-b text-left">Kode</th>
+                    <th className="px-3 py-2 font-semibold border-b text-left">Nama</th>
+                    <th className="px-3 py-2 font-semibold border-b text-left">Kategori</th>
+                    <th className="px-3 py-2 font-semibold border-b text-left">Arus Kas</th>
+                    <th className="px-3 py-2 font-semibold border-b text-right">Saldo Awal</th>
+                    <th className="px-3 py-2 font-semibold border-b text-left">Aksi</th>
+                    <th className="border-b" style={{ padding: 0 }}></th> {/* Scrollbar space */}
+                  </tr>
+                  <tr style={{ background: theme.tableHeaderColor }}>
+                    <th className="px-3 py-1 border-b">
+                      <input
+                        type="text"
+                        value={filterKode}
+                        onChange={e => setFilterKode(e.target.value)}
+                        className="w-full border rounded px-2 py-1 text-xs"
+                        placeholder="Filter kode"
+                        style={{
+                          background: theme.fieldColor,
+                          color: theme.fontColor,
+                          fontFamily: theme.fontFamily,
+                        }}
+                      />
+                    </th>
+                    <th className="px-3 py-1 border-b">
+                      <input
+                        type="text"
+                        value={filterNama}
+                        onChange={e => setFilterNama(e.target.value)}
+                        className="w-full border rounded px-2 py-1 text-xs"
+                        placeholder="Filter nama"
+                        style={{
+                          background: theme.fieldColor,
+                          color: theme.fontColor,
+                          fontFamily: theme.fontFamily,
+                        }}
+                      />
+                    </th>
+                    <th className="px-3 py-1 border-b">
+                      <input
+                        type="text"
+                        value={filterKategori}
+                        onChange={e => setFilterKategori(e.target.value)}
+                        className="w-full border rounded px-2 py-1 text-xs"
+                        placeholder="Filter kategori"
+                        style={{
+                          background: theme.fieldColor,
+                          color: theme.fontColor,
+                          fontFamily: theme.fontFamily,
+                        }}
+                      />
+                    </th>
+                    <th className="px-3 py-1 border-b"></th>
+                    <th className="px-3 py-1 border-b"></th>
+                    <th className="px-3 py-1 border-b"></th>
+                    <th className="border-b" style={{ padding: 0 }}></th> {/* Scrollbar space */}
+                  </tr>
+                </thead>
+              </table>
+            </div>
+
+            {/* Scrollable Body */}
+            <div className="flex-1 overflow-auto">
+              <table className="w-full text-sm" style={{ fontFamily: theme.tableFontFamily, tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '120px' }} />
+                  <col style={{ width: 'auto' }} />
+                  <col style={{ width: '300px' }} />
+                  <col style={{ width: '150px' }} />
+                  <col style={{ width: '150px' }} />
+                  <col style={{ width: '150px' }} />
+                </colgroup>
+                <tbody>
+                  {pagedData.map((row, index) =>
+                    row.isHeader ? (
+                      <tr key={"header-" + row.kategori} style={{ background: theme.cardColor }}>
+                        <td colSpan={6} className="px-3 py-2 font-bold border-b" style={{ color: theme.fontColor }}>
+                          {row.kategori}
+                        </td>
+                      </tr>
+                    ) : (
+                      <tr key={row.id || index} className="border-b last:border-b-0 hover:bg-opacity-50" style={{ background: theme.tableBodyColor, color: theme.tableFontColor }}>
+                        <td className="px-3 py-2">{row.kode}</td>
+                        <td className="px-3 py-2">{row.nama}</td>
+                        <td className="px-3 py-2">
+                          {row.masterCategoryCOA
+                            ? `${row.masterCategoryCOA.kode} - ${row.masterCategoryCOA.nama} (${row.masterCategoryCOA.tipeAkun})`
+                            : "-"
+                          }
+                        </td>
+                        <td className="px-3 py-2">
+                          {row.cashflowActivity ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800" title="Override Manual">
+                              {row.cashflowActivity.charAt(0).toUpperCase() + row.cashflowActivity.slice(1)}
+                              {row.cashflowDirection ? ` (${row.cashflowDirection})` : ''}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600" title="Ditentukan Otomatis oleh Sistem">
+                              Auto
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {row.saldoAwal !== undefined && row.saldoAwal !== null
+                            ? formatNumber(row.saldoAwal)
+                            : "-"}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex gap-2">
                             <button
-                              type="button"
-                              className="px-2 py-1 rounded-lg font-semibold transition text-sm"
+                              onClick={() => handleEdit(row)}
+                              className="px-3 py-1 rounded-lg font-semibold transition text-sm"
                               style={{
                                 background: theme.buttonEdit,
                                 color: "#fff",
                                 fontFamily: theme.fontFamily,
                               }}
-                              onClick={() => {
-                                setFormKategori({
-                                  kode: kat.kode,
-                                  nama: kat.nama,
-                                  tipeAkun: kat.tipeAkun,
-                                  isKasBank: !!kat.isKasBank,
-                                });
-                                setEditKategoriId(kat.id);
-                              }}
+                              title="Edit COA"
                             >
                               Edit
                             </button>
                             <button
-                              type="button"
-                              className="px-2 py-1 rounded-lg font-semibold transition text-sm"
+                              onClick={() => handleDelete(row)}
+                              className="px-3 py-1 rounded-lg font-semibold transition text-sm"
                               style={{
                                 background: theme.buttonHapus,
                                 color: "#fff",
                                 fontFamily: theme.fontFamily,
                               }}
-                              onClick={async () => {
-                                if (window.confirm(`Hapus kategori ${kat.nama}?`)) {
-                                  setLoadingKategori(true);
-                                  try {
-                                    await api.delete(`/master-category-coa/${kat.id}`);
-                                    const kategoriRes = await api.get("/master-category-coa");
-                                    const sortedKategori = kategoriRes.data.sort((a, b) => parseInt(a.tipeAkun, 10) - parseInt(b.tipeAkun, 10));
-                                    setKategoriList(sortedKategori);
-                                    setFormKategori({ kode: "", nama: "", tipeAkun: "", isKasBank: false });
-                                    setEditKategoriId(null);
-                                  } catch {
-                                    alert("Gagal hapus kategori!");
-                                  }
-                                  setLoadingKategori(false);
-                                }
-                              }}
+                              title="Hapus COA"
                             >
                               Hapus
                             </button>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
-      )
+      </div >
+      {
+        showModalKategori && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40" >
+            <div className="rounded-xl p-6 shadow-lg w-full max-w-6xl" style={{ background: theme.formColor }}>
+              <h2 className="text-lg font-bold mb-4" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+                {editKategoriId ? 'Edit Kategori COA' : 'Tambah Kategori COA'}
+              </h2>
+              <div className="flex flex-row gap-8">
+                {/* Form Input */}
+                <form
+                  style={{ background: theme.cardColor }}
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    setLoadingKategori(true);
+                    try {
+                      if (editKategoriId) {
+                        // Edit mode
+                        await api.put(`/master-category-coa/${editKategoriId}`, formKategori);
+                      } else {
+                        // Insert mode
+                        await api.post("/master-category-coa", formKategori);
+                      }
+                      const kategoriRes = await api.get("/master-category-coa");
+                      const sortedKategori = kategoriRes.data.sort((a, b) => parseInt(a.tipeAkun, 10) - parseInt(b.tipeAkun, 10));
+                      setKategoriList(sortedKategori);
+                      setForm(prev => ({ ...prev, masterCategoryCOAId: editKategoriId ? editKategoriId.toString() : kategoriRes.data[kategoriRes.data.length - 1].id.toString() }));
+                      setShowModalKategori(false);
+                      setFormKategori({ kode: "", nama: "", tipeAkun: "", isKasBank: false });
+                      setEditKategoriId(null);
+                    } catch (err) {
+                      alert("Gagal simpan kategori!");
+                    }
+                    setLoadingKategori(false);
+                  }}
+                  className="space-y-4 w-1/3 p-4 rounded-lg"
+                >
+                  <div>
+                    <label className="block mb-1 font-semibold" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+                      Kode
+                    </label>
+                    <input
+                      type="text"
+                      value={formKategori.kode}
+                      onChange={e => setFormKategori(f => ({ ...f, kode: e.target.value }))}
+                      className="w-full border rounded-lg px-3 py-2 transition"
+                      required
+                      style={{
+                        background: theme.fieldColor,
+                        color: theme.fontColor,
+                        fontFamily: theme.fontFamily,
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-semibold" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+                      Nama
+                    </label>
+                    <input
+                      type="text"
+                      value={formKategori.nama}
+                      onChange={e => setFormKategori(f => ({ ...f, nama: e.target.value }))}
+                      className="w-full border rounded-lg px-3 py-2 transition"
+                      required
+                      style={{
+                        background: theme.fieldColor,
+                        color: theme.fontColor,
+                        fontFamily: theme.fontFamily,
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-semibold" style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+                      Tipe Akun
+                    </label>
+                    <select
+                      value={formKategori.tipeAkun}
+                      onChange={e => setFormKategori(f => ({ ...f, tipeAkun: e.target.value }))}
+                      className="w-full border rounded-lg px-3 py-2 transition"
+                      required
+                      style={{
+                        background: theme.fieldColor,
+                        color: theme.fontColor,
+                        fontFamily: theme.fontFamily,
+                      }}
+                    >
+                      <option value="">Pilih Tipe Akun</option>
+                      {Object.entries(tipeAkunMap).map(([key, val]) => (
+                        <option key={key} value={key}>{val}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formKategori.isKasBank || false}
+                      onChange={e => setFormKategori(f => ({ ...f, isKasBank: e.target.checked }))}
+                      id="isKasBank"
+                      className="rounded"
+                    />
+                    <label htmlFor="isKasBank" className="font-semibold" style={{
+                      color: theme.fontColor,
+                      fontFamily: theme.fontFamily,
+                    }}>Akun Kas & Bank</label>
+                  </div>
+                  <div className="flex gap-2 justify-end mt-4">
+                    <button
+                      type="button"
+                      className="px-4 py-2 rounded-lg font-semibold transition"
+                      style={{
+                        background: theme.buttonRefresh,
+                        color: "#fff",
+                        fontFamily: theme.fontFamily,
+                      }}
+                      onClick={() => {
+                        setShowModalKategori(false);
+                        setFormKategori({ kode: "", nama: "", tipeAkun: "", isKasBank: false });
+                        setEditKategoriId(null);
+                      }}
+                      disabled={loadingKategori}
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-lg font-semibold transition"
+                      style={{
+                        background: theme.buttonSimpan,
+                        color: "#fff",
+                        fontFamily: theme.fontFamily,
+                      }}
+                      disabled={loadingKategori}
+                    >
+                      {loadingKategori ? 'Menyimpan...' : (editKategoriId ? 'Update' : 'Simpan')}
+                    </button>
+                  </div>
+                </form>
+                {/* Tabel Kategori */}
+                <div className="w-2/3 rounded-lg" style={{ maxHeight: 400, overflowY: "auto", background: theme.cardColor }}>
+                  <table className="w-full border rounded-lg text-sm shadow-sm" style={{ fontFamily: theme.tableFontFamily }}>
+                    <thead>
+                      <tr style={{ background: theme.tableHeaderColor, color: theme.tableFontColor }}>
+                        <th className="px-3 py-2 font-semibold border-b">Kode</th>
+                        <th className="px-3 py-2 font-semibold border-b">Nama</th>
+                        <th className="px-3 py-2 font-semibold border-b">Tipe Akun</th>
+                        <th className="px-3 py-2 font-semibold border-b">Kas & Bank</th>
+                        <th className="px-3 py-2 font-semibold border-b">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...kategoriList]
+                        .sort((a, b) => parseInt(a.tipeAkun, 10) - parseInt(b.tipeAkun, 10))
+                        .map((kat) => (
+                          <tr key={kat.id} style={{ background: theme.tableBodyColor, color: theme.tableFontColor }}>
+                            <td className="px-3 py-2">{kat.kode}</td>
+                            <td className="px-3 py-2">{kat.nama}</td>
+                            <td className="px-3 py-2">{tipeAkunMap[kat.tipeAkun] || kat.tipeAkun}</td>
+                            <td className="px-3 py-2 text-center">{kat.isKasBank ? "✔" : ""}</td>
+                            <td className="px-3 py-2 flex gap-2">
+                              <button
+                                type="button"
+                                className="px-2 py-1 rounded-lg font-semibold transition text-sm"
+                                style={{
+                                  background: theme.buttonEdit,
+                                  color: "#fff",
+                                  fontFamily: theme.fontFamily,
+                                }}
+                                onClick={() => {
+                                  setFormKategori({
+                                    kode: kat.kode,
+                                    nama: kat.nama,
+                                    tipeAkun: kat.tipeAkun,
+                                    isKasBank: !!kat.isKasBank,
+                                  });
+                                  setEditKategoriId(kat.id);
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="px-2 py-1 rounded-lg font-semibold transition text-sm"
+                                style={{
+                                  background: theme.buttonHapus,
+                                  color: "#fff",
+                                  fontFamily: theme.fontFamily,
+                                }}
+                                onClick={async () => {
+                                  if (window.confirm(`Hapus kategori ${kat.nama}?`)) {
+                                    setLoadingKategori(true);
+                                    try {
+                                      await api.delete(`/master-category-coa/${kat.id}`);
+                                      const kategoriRes = await api.get("/master-category-coa");
+                                      const sortedKategori = kategoriRes.data.sort((a, b) => parseInt(a.tipeAkun, 10) - parseInt(b.tipeAkun, 10));
+                                      setKategoriList(sortedKategori);
+                                      setFormKategori({ kode: "", nama: "", tipeAkun: "", isKasBank: false });
+                                      setEditKategoriId(null);
+                                    } catch {
+                                      alert("Gagal hapus kategori!");
+                                    }
+                                    setLoadingKategori(false);
+                                  }
+                                }}
+                              >
+                                Hapus
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
       }
     </div >
   );

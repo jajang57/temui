@@ -6,22 +6,14 @@ export default function InputTransaksiLayout({ children }) {
 
   return (
     <div
-      className="p-6 min-h-screen"
+      className="p-0 min-h-screen"
       style={{
         background: theme.backgroundColor,
         fontFamily: theme.fontFamily,
         color: theme.fontColor,
       }}
     >
-      <h1
-        className="text-2xl font-bold mb-4"
-        style={{
-          color: theme.fontColor,
-          fontFamily: theme.fontFamily,
-        }}
-      >
-        Input Transaksi
-      </h1>
+
       <div
         className="rounded shadow p-4"
         style={{

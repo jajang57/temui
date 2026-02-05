@@ -13,6 +13,7 @@ import (
 // GET /api/laporan/laba-rugi?start_date=2024-01-01&end_date=2024-12-31
 func GetLaporanLabaRugi(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB) // Use Client DB
 		startDate := c.Query("start_date")
 		endDate := c.Query("end_date")
 

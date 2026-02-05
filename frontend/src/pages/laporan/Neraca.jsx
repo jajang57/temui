@@ -278,7 +278,7 @@ export default function Neraca() {
     return (
         <ReportLayout>
             {/* Filter Toolbar - Hidden in Print */}
-            <div className="sticky top-[80px] z-40 bg-white border-b border-gray-200 shadow-sm no-print">
+            <div className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm no-print">
                 <div className="max-w-7xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
                     <div className="flex flex-col">
                         <h1 className="text-xl font-bold text-gray-900 tracking-tight" style={{ fontFamily: theme.fontFamily }}>
@@ -418,7 +418,7 @@ export default function Neraca() {
                                                 <TableCell className="section-header" sx={{ fontWeight: 900, fontSize: 14, py: 1.5, borderBottom: "1.2pt solid black !important", "@media print": { fontSize: "12pt !important", pt: 3 } }}>EKUITAS</TableCell>
                                                 <TableCell align="right" className="amount" sx={{ fontWeight: 900, fontSize: 14, fontFamily: 'IBM Plex Mono', borderBottom: "1.2pt solid black !important", "@media print": { fontSize: "12pt !important" } }}>{formatCurrency(data.totalEkuitas)}</TableCell>
                                             </TableRow>
-                                            {data.ekuitas.map((g, i) => <NeracaGroup key={i} group={g} theme={theme} showSubtotal={false} />)}
+                                            {data.ekuitas.map((g, i) => <NeracaGroup key={i} group={g} theme={theme} />)}
                                             <TableRow>
                                                 <TableCell sx={{ pl: 8, fontStyle: "italic", "@media print": { pl: 6, fontSize: "10pt" } }}>Laba Berjalan (Laba Ditahan)</TableCell>
                                                 <TableCell align="right" className="amount" sx={{ fontFamily: 'IBM Plex Mono', fontWeight: 500, "@media print": { fontSize: "10pt" } }}>{formatCurrency(data.labaDitahan)}</TableCell>

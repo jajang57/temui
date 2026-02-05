@@ -25,6 +25,7 @@ func NewPenjualanHandler(db *gorm.DB) *PenjualanHandler {
 
 // Create Penjualan (header + detail)
 func (h *PenjualanHandler) CreatePenjualan(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	var req models.Penjualan
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -68,7 +69,7 @@ func (h *PenjualanHandler) CreatePenjualan(c *gin.Context) {
 	}
 
 	// Simpan header+detail + GL dalam satu transaksi
-	tx := h.DB.Begin()
+	tx := db.Begin()
 
 	// Generate Nomor Invoice jika AUTO atau kosong
 	if req.NomorInvoice == "" || req.NomorInvoice == "AUTO" {
@@ -109,6 +110,7 @@ func (h *PenjualanHandler) CreatePenjualan(c *gin.Context) {
 // Get All Penjualan (paginated & searchable)
 // Get All Penjualan (paginated, searchable, sortable)
 func (h *PenjualanHandler) GetAllPenjualan(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	// Parse pagination params
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
@@ -132,7 +134,7 @@ func (h *PenjualanHandler) GetAllPenjualan(c *gin.Context) {
 	var total int64
 
 	// Build query with JOIN
-	query := h.DB.Table("penjualan").
+	query := db.Table("penjualan").
 		Select("penjualan.*, master_pembeli.nama as customer_nama").
 		Joins("LEFT JOIN master_pembeli ON penjualan.customer_id = master_pembeli.id")
 
@@ -220,9 +222,10 @@ func (h *PenjualanHandler) GetAllPenjualan(c *gin.Context) {
 
 // Get Penjualan by ID
 func (h *PenjualanHandler) GetPenjualanByID(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	id := c.Param("id")
 	var penjualan models.Penjualan
-	if err := h.DB.Preload("Details").First(&penjualan, id).Error; err != nil {
+	if err := db.Preload("Details").First(&penjualan, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Data tidak ditemukan"})
 		return
 	}
@@ -231,6 +234,7 @@ func (h *PenjualanHandler) GetPenjualanByID(c *gin.Context) {
 
 // Update Penjualan - Delete All Then Recreate
 func (h *PenjualanHandler) UpdatePenjualan(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	id := c.Param("id")
 	var req models.Penjualan
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -244,7 +248,7 @@ func (h *PenjualanHandler) UpdatePenjualan(c *gin.Context) {
 
 	// Get existing penjualan for reference
 	var existingPenjualan models.Penjualan
-	if err := h.DB.First(&existingPenjualan, id).Error; err != nil {
+	if err := db.First(&existingPenjualan, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Data tidak ditemukan"})
 		return
 	}
@@ -274,7 +278,7 @@ func (h *PenjualanHandler) UpdatePenjualan(c *gin.Context) {
 	}
 
 	// ✅ START TRANSACTION - DELETE ALL THEN RECREATE
-	tx := h.DB.Begin()
+	tx := db.Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -375,7 +379,7 @@ func (h *PenjualanHandler) UpdatePenjualan(c *gin.Context) {
 
 	// 8. Return fresh data untuk frontend sync
 	var finalPenjualan models.Penjualan
-	if err := h.DB.Preload("Details").First(&finalPenjualan, req.ID).Error; err != nil {
+	if err := db.Preload("Details").First(&finalPenjualan, req.ID).Error; err != nil {
 		log.Printf("[penjualan] failed to reload for response: %v", err)
 		c.JSON(http.StatusOK, gin.H{"success": true, "message": "Update berhasil"})
 		return
@@ -391,13 +395,14 @@ func (h *PenjualanHandler) UpdatePenjualan(c *gin.Context) {
 
 // Delete Penjualan
 func (h *PenjualanHandler) DeletePenjualan(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	id := c.Param("id")
 	var penjualan models.Penjualan
-	if err := h.DB.First(&penjualan, id).Error; err != nil {
+	if err := db.First(&penjualan, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Data tidak ditemukan"})
 		return
 	}
-	tx := h.DB.Begin()
+	tx := db.Begin()
 	// delete GL entries for this invoice (hard delete)
 	if err := tx.Unscoped().Where("nomor_transaksi = ?", penjualan.NomorInvoice).Delete(&models.GL{}).Error; err != nil {
 		tx.Rollback()
@@ -420,10 +425,11 @@ func (h *PenjualanHandler) DeletePenjualan(c *gin.Context) {
 
 // GetPenjualanByNomor retrieves penjualan by nomor invoice
 func (h *PenjualanHandler) GetPenjualanByNomor(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	nomor := c.Param("nomor")
 	var penjualan models.Penjualan
 
-	if err := h.DB.Preload("Details").Where("nomor_invoice = ?", nomor).First(&penjualan).Error; err != nil {
+	if err := db.Preload("Details").Where("nomor_invoice = ?", nomor).First(&penjualan).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Penjualan not found"})
 			return
@@ -437,6 +443,7 @@ func (h *PenjualanHandler) GetPenjualanByNomor(c *gin.Context) {
 
 // UpdatePenjualanStatus updates only the status of penjualan
 func (h *PenjualanHandler) UpdatePenjualanStatus(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	id := c.Param("id")
 	var statusData struct {
 		Status string `json:"status" binding:"required"`
@@ -448,7 +455,7 @@ func (h *PenjualanHandler) UpdatePenjualanStatus(c *gin.Context) {
 	}
 
 	var penjualan models.Penjualan
-	if err := h.DB.First(&penjualan, id).Error; err != nil {
+	if err := db.First(&penjualan, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Penjualan not found"})
 			return
@@ -458,24 +465,25 @@ func (h *PenjualanHandler) UpdatePenjualanStatus(c *gin.Context) {
 	}
 
 	// Update status
-	if err := h.DB.Model(&penjualan).Update("status", statusData.Status).Error; err != nil {
+	if err := db.Model(&penjualan).Update("status", statusData.Status).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update status"})
 		return
 	}
 
 	// Fetch updated data
-	h.DB.Preload("Details").First(&penjualan, penjualan.ID)
+	db.Preload("Details").First(&penjualan, penjualan.ID)
 
 	c.JSON(http.StatusOK, penjualan)
 }
 
 // GetPenjualanReport generates report data for penjualan
 func (h *PenjualanHandler) GetPenjualanReport(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
 	status := c.Query("status")
 
-	query := h.DB.Preload("Details")
+	query := db.Preload("Details")
 
 	if startDate != "" && endDate != "" {
 		query = query.Where("tanggal BETWEEN ? AND ?", startDate, endDate)
@@ -510,6 +518,7 @@ func (h *PenjualanHandler) GetPenjualanReport(c *gin.Context) {
 
 // GetNextInvoiceNumber generates next invoice number
 func (h *PenjualanHandler) GetNextInvoiceNumber(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	today := time.Now()
 	year := today.Year()
 	month := int(today.Month())
@@ -518,7 +527,7 @@ func (h *PenjualanHandler) GetNextInvoiceNumber(c *gin.Context) {
 	prefix := fmt.Sprintf("INV-%04d%02d%02d-", year, month, day)
 
 	var count int64
-	h.DB.Model(&models.Penjualan{}).Where("nomor_invoice LIKE ?", prefix+"%").Count(&count)
+	db.Model(&models.Penjualan{}).Where("nomor_invoice LIKE ?", prefix+"%").Count(&count)
 
 	nextNumber := fmt.Sprintf("%s%03d", prefix, count+1)
 

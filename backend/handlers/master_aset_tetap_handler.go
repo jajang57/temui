@@ -13,6 +13,7 @@ import (
 // GetMasterAsetTetap - Get all master aset tetap
 func GetMasterAsetTetap(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		var data []models.MasterAsetTetap
 		if err := db.Order("kode_aset ASC").Find(&data).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -54,6 +55,7 @@ func GetMasterAsetTetap(db *gorm.DB) gin.HandlerFunc {
 // GetMasterAsetTetapByID - Get master aset tetap by ID
 func GetMasterAsetTetapByID(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		id := c.Param("id")
 		var data models.MasterAsetTetap
 		if err := db.First(&data, id).Error; err != nil {
@@ -67,6 +69,7 @@ func GetMasterAsetTetapByID(db *gorm.DB) gin.HandlerFunc {
 // CreateMasterAsetTetap - Create new master aset tetap
 func CreateMasterAsetTetap(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		var req struct {
 			KodeAset                string  `json:"kodeAset" binding:"required"`
 			NamaAset                string  `json:"namaAset" binding:"required"`
@@ -143,6 +146,7 @@ func CreateMasterAsetTetap(db *gorm.DB) gin.HandlerFunc {
 // UpdateMasterAsetTetap - Update master aset tetap
 func UpdateMasterAsetTetap(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		id := c.Param("id")
 		var data models.MasterAsetTetap
 		if err := db.First(&data, id).Error; err != nil {
@@ -249,6 +253,7 @@ func UpdateMasterAsetTetap(db *gorm.DB) gin.HandlerFunc {
 // DeleteMasterAsetTetap - Delete master aset tetap
 func DeleteMasterAsetTetap(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		id := c.Param("id")
 		var data models.MasterAsetTetap
 		if err := db.First(&data, id).Error; err != nil {
@@ -283,6 +288,7 @@ type AssetRegistrationItem struct {
 // GetPembelianItemsForAssetRegistration - Get pembelian items that can be registered as assets
 func GetPembelianItemsForAssetRegistration(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		var pembelians []models.Pembelian
 
 		// Get all pembelian with details and supplier preloaded
@@ -339,6 +345,7 @@ func GetPembelianItemsForAssetRegistration(db *gorm.DB) gin.HandlerFunc {
 // GetDraftAssets - Get all assets with Draft status
 func GetDraftAssets(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		var assets []models.MasterAsetTetap
 		if err := db.Where("status_posting = ?", "Draft").Order("kode_aset ASC").Find(&assets).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -351,6 +358,7 @@ func GetDraftAssets(db *gorm.DB) gin.HandlerFunc {
 // PostAssetsToGL - Post selected assets to General Ledger
 func PostAssetsToGL(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		var request struct {
 			AssetIDs []uint `json:"assetIds" binding:"required"`
 		}
@@ -514,6 +522,7 @@ type AssetDepreciationData struct {
 // GetAssetsForDepreciation - Get assets eligible for depreciation calculation
 func GetAssetsForDepreciation(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		tanggalMulai := c.Query("tanggalMulai")
 		tanggalAkhir := c.Query("tanggalAkhir")
 
@@ -660,6 +669,7 @@ func GetAssetsForDepreciation(db *gorm.DB) gin.HandlerFunc {
 // PostDepreciationToGL - Calculate and post depreciation to GL
 func PostDepreciationToGL(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		type AssetPeriode struct {
 			ID      uint   `json:"id"`
 			Periode string `json:"periode"`

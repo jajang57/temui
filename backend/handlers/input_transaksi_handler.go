@@ -14,6 +14,7 @@ import (
 // GET generate nomor transaksi otomatis
 func GetGenerateNoTransaksi(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := c.MustGet("db").(*gorm.DB)
 		// Ambil parameter dari query string
 		kodeBankStr := c.Query("kodeBank")
 		userIDStr := c.Query("userID")
@@ -90,9 +91,8 @@ func GetInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 
 		var transaksi []models.InputTransaksi
 
-		query := db.Order("tanggal ASC, id ASC")
+		query := db.Debug().Order("tanggal ASC, id ASC")
 		if coaAkunBank != "" {
-			// ✅ FIXED: Use correct field name (snake_case)
 			fmt.Printf("[DEBUG] Adding WHERE clause: coa_akun_bank = '%s'\n", coaAkunBank)
 			query = query.Where("coa_akun_bank = ?", coaAkunBank)
 		} else {
@@ -142,7 +142,9 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 		// --- Tambahan: Simpan ke tabel GL ---
 		// Ambil kategori COA dari AkunTransaksi
 		var coa models.MasterCOA
-		if err := db.Preload("MasterCategoryCOA").Where("kode = ?", input.AkunTransaksi).First(&coa).Error; err == nil {
+		if err := db.Preload("MasterCategoryCOA").Where("kode = ?", input.AkunTransaksi).First(&coa).Error; err != nil {
+			fmt.Printf("[ERROR] PostInputTransaksi: Gagal mengambil data COA untuk akun %s: %v\n", input.AkunTransaksi, err)
+		} else {
 			tipeAkun := coa.MasterCategoryCOA.TipeAkun
 			fmt.Printf("[DEBUG] PostInputTransaksi: tipeAkun untuk akun %s adalah %s\n", input.AkunTransaksi, tipeAkun)
 
@@ -186,7 +188,11 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						ProjectNo:      input.ProjectNo,
 						ProjectName:    input.ProjectName,
 					}
-					db.Create(&gl1)
+					if err := db.Create(&gl1).Error; err != nil {
+						fmt.Printf("[ERROR] GL1 Creation Failed: %v\n", err)
+					} else {
+						fmt.Printf("[DEBUG] Created GL1 ID: %d, NoTransaksi: %s\n", gl1.ID, gl1.NomorTransaksi)
+					}
 					syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
 
 					gl2 := models.GL{
@@ -201,7 +207,11 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						ProjectNo:      input.ProjectNo,
 						ProjectName:    input.ProjectName,
 					}
-					db.Create(&gl2)
+					if err := db.Create(&gl2).Error; err != nil {
+						fmt.Printf("[ERROR] GL2 Creation Failed: %v\n", err)
+					} else {
+						fmt.Printf("[DEBUG] Created GL2 ID: %d, NoTransaksi: %s\n", gl2.ID, gl2.NomorTransaksi)
+					}
 					syncGLSummary(db, gl2.AkunTransaksi, gl2.Tanggal, gl2.Debit, gl2.Kredit)
 				}
 				// Transaksi tukar: COA Akun Bank di Debit, Akun Transaksi di Kredit
@@ -219,7 +229,11 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						ProjectNo:      input.ProjectNo,
 						ProjectName:    input.ProjectName,
 					}
-					db.Create(&gl1)
+					if err := db.Create(&gl1).Error; err != nil {
+						fmt.Printf("[ERROR] GL1 (Credit) Creation Failed: %v\n", err)
+					} else {
+						fmt.Printf("[DEBUG] Created GL1 (Credit) ID: %d, NoTransaksi: %s\n", gl1.ID, gl1.NomorTransaksi)
+					}
 					syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
 
 					gl2 := models.GL{
@@ -234,7 +248,11 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						ProjectNo:      input.ProjectNo,
 						ProjectName:    input.ProjectName,
 					}
-					db.Create(&gl2)
+					if err := db.Create(&gl2).Error; err != nil {
+						fmt.Printf("[ERROR] GL2 (Credit) Creation Failed: %v\n", err)
+					} else {
+						fmt.Printf("[DEBUG] Created GL2 (Credit) ID: %d, NoTransaksi: %s\n", gl2.ID, gl2.NomorTransaksi)
+					}
 					syncGLSummary(db, gl2.AkunTransaksi, gl2.Tanggal, gl2.Debit, gl2.Kredit)
 
 				}
@@ -420,7 +438,11 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						ProjectNo:      input.ProjectNo,
 						ProjectName:    input.ProjectName,
 					}
-					db.Create(&gl1)
+					if err := db.Create(&gl1).Error; err != nil {
+						fmt.Printf("[ERROR] GL1 (Credit) Creation Failed: %v\n", err)
+					} else {
+						fmt.Printf("[DEBUG] Created GL1 (Credit) ID: %d, NoTransaksi: %s\n", gl1.ID, gl1.NomorTransaksi)
+					}
 					syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
 
 					gl2 := models.GL{
@@ -435,11 +457,16 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						ProjectNo:      input.ProjectNo,
 						ProjectName:    input.ProjectName,
 					}
-					db.Create(&gl2)
+					if err := db.Create(&gl2).Error; err != nil {
+						fmt.Printf("[ERROR] GL2 (Credit) Creation Failed: %v\n", err)
+					} else {
+						fmt.Printf("[DEBUG] Created GL2 (Credit) ID: %d, NoTransaksi: %s\n", gl2.ID, gl2.NomorTransaksi)
+					}
 					syncGLSummary(db, gl2.AkunTransaksi, gl2.Tanggal, gl2.Debit, gl2.Kredit)
 				}
+			} else {
+				fmt.Printf("[WARNING] PostInputTransaksi: Tipe akun %s tidak ditangani oleh logic GL generation\n", tipeAkun)
 			}
-			// Jika ingin handle tipe lain, tambahkan else if/else di sini
 		}
 
 		c.JSON(http.StatusOK, input)
@@ -487,7 +514,9 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 		var updated models.InputTransaksi
 		if err := db.First(&updated, id).Error; err == nil {
 			var coa models.MasterCOA
-			if err := db.Preload("MasterCategoryCOA").Where("kode = ?", updated.AkunTransaksi).First(&coa).Error; err == nil {
+			if err := db.Preload("MasterCategoryCOA").Where("kode = ?", updated.AkunTransaksi).First(&coa).Error; err != nil {
+				fmt.Printf("[ERROR] UpdateInputTransaksi: Gagal mengambil data COA untuk akun %s: %v\n", updated.AkunTransaksi, err)
+			} else {
 				tipeAkun := coa.MasterCategoryCOA.TipeAkun
 
 				nomorJurnal, err := GenerateNomorJurnal(db, updated.Tanggal.Time)
@@ -688,6 +717,8 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						db.Create(&gl2)
 						syncGLSummary(db, gl2.AkunTransaksi, gl2.Tanggal, gl2.Debit, gl2.Kredit)
 					}
+				} else {
+					fmt.Printf("[WARNING] UpdateInputTransaksi: Tipe akun %s tidak ditangani oleh logic GL generation\n", tipeAkun)
 				}
 			}
 		}

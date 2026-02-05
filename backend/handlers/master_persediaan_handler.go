@@ -95,7 +95,7 @@ func parseUint(c *gin.Context, key string) (uint, bool) {
 }
 
 // Ambil event masuk/keluar dengan nama tabel dari model (anti mismatch)
-func (h *InventoryHandler) fetchEventsBetween(itemCode string, gudangID *uint, start, end *time.Time) ([]invEvent, error) {
+func (h *InventoryHandler) fetchEventsBetween(db *gorm.DB, itemCode string, gudangID *uint, start, end *time.Time) ([]invEvent, error) {
 	var evs []invEvent
 
 	pbHdr := (models.Pembelian{}).TableName()
@@ -210,21 +210,21 @@ func (h *InventoryHandler) fetchEventsBetween(itemCode string, gudangID *uint, s
 	}
 
 	var inRows []invEvent
-	if err := h.DB.Raw(qIn, args...).Scan(&inRows).Error; err != nil {
+	if err := db.Raw(qIn, args...).Scan(&inRows).Error; err != nil {
 		return nil, err
 	}
 	evs = append(evs, inRows...)
 
 	// Penjualan (keluar) + join gudang & barang
 	var outRows []invEvent
-	if err := h.DB.Raw(qOut, args...).Scan(&outRows).Error; err != nil {
+	if err := db.Raw(qOut, args...).Scan(&outRows).Error; err != nil {
 		return nil, err
 	}
 	evs = append(evs, outRows...)
 
 	// Adjustments
 	var adjRows []invEvent
-	if err := h.DB.Raw(qAdj, argsAdj...).Scan(&adjRows).Error; err != nil {
+	if err := db.Raw(qAdj, argsAdj...).Scan(&adjRows).Error; err != nil {
 		return nil, err
 	}
 	evs = append(evs, adjRows...)
@@ -307,6 +307,7 @@ func runMovingAverage(beginQty, beginCost float64, events []invEvent) (rows []in
 
 // GET /persediaan/summary?itemCode=&gudangId=&startDate=&endDate=
 func (h *InventoryHandler) GetInventorySummary(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	itemCode := c.Query("itemCode")
 	gid, okG := parseUint(c, "gudangId")
 	var gidPtr *uint
@@ -321,7 +322,7 @@ func (h *InventoryHandler) GetInventorySummary(c *gin.Context) {
 
 	// saldo awal s.d. H-1
 	before := start.AddDate(0, 0, -1)
-	evBefore, err := h.fetchEventsBetween(itemCode, gidPtr, nil, &before)
+	evBefore, err := h.fetchEventsBetween(db, itemCode, gidPtr, nil, &before)
 	if err != nil {
 		log.Printf("[persediaan] fetchEventsBefore error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil saldo awal"})
@@ -345,7 +346,7 @@ func (h *InventoryHandler) GetInventorySummary(c *gin.Context) {
 	}
 
 	// periode
-	evPeriod, err := h.fetchEventsBetween(itemCode, gidPtr, &start, &end)
+	evPeriod, err := h.fetchEventsBetween(db, itemCode, gidPtr, &start, &end)
 	if err != nil {
 		log.Printf("[persediaan] fetchEventsPeriod error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil mutasi periode"})
@@ -411,6 +412,7 @@ func (h *InventoryHandler) GetInventorySummary(c *gin.Context) {
 
 // GET /persediaan/mutasi?itemCode=&gudangId=&startDate=&endDate=
 func (h *InventoryHandler) GetInventoryMutasi(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
 	itemCode := c.Query("itemCode")
 	gid, okG := parseUint(c, "gudangId")
 	var gidPtr *uint
@@ -424,7 +426,7 @@ func (h *InventoryHandler) GetInventoryMutasi(c *gin.Context) {
 	end = time.Date(end.Year(), end.Month(), end.Day(), 23, 59, 59, 0, end.Location())
 
 	before := start.AddDate(0, 0, -1)
-	evBefore, err := h.fetchEventsBetween(itemCode, gidPtr, nil, &before)
+	evBefore, err := h.fetchEventsBetween(db, itemCode, gidPtr, nil, &before)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil saldo awal"})
 		return
@@ -448,7 +450,7 @@ func (h *InventoryHandler) GetInventoryMutasi(c *gin.Context) {
 		groupBeginCost[k] = cost
 	}
 
-	evPeriod, err := h.fetchEventsBetween(itemCode, gidPtr, &start, &end)
+	evPeriod, err := h.fetchEventsBetween(db, itemCode, gidPtr, &start, &end)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil mutasi"})
 		return
