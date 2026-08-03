@@ -98,6 +98,7 @@ func GetNeracaKomparatif(db *gorm.DB) gin.HandlerFunc {
 }
 
 func calculateNeracaInternal(db *gorm.DB, endDate string) (models.NeracaResponse, error) {
+	endDateEOD := endDate + " 23:59:59"
 	// Query Aset (TipeAkun = '1') - Saldo Normal Debit
 	var aset []models.AkunSaldo
 	db.Raw(`
@@ -109,19 +110,19 @@ func calculateNeracaInternal(db *gorm.DB, endDate string) (models.NeracaResponse
 			mc.saldo_awal + COALESCE(SUM(gl.debit), 0) - COALESCE(SUM(gl.kredit), 0) AS saldo
 		FROM master_coa mc
 		JOIN master_category_coa mcc ON mc.master_category_coa_id = mcc.id
-		LEFT JOIN gl ON gl.akun_transaksi = mc.kode 
+		LEFT JOIN gl ON gl.akun_transaksi = mc.kode
 			AND gl.tanggal <= ?
 			AND gl.deleted_at IS NULL
 		WHERE mcc.tipe_akun = '1'
 		GROUP BY mcc.kode, mcc.nama, mc.kode, mc.nama, mc.saldo_awal
 		HAVING mc.saldo_awal + COALESCE(SUM(gl.debit), 0) - COALESCE(SUM(gl.kredit), 0) != 0
 		ORDER BY mc.kode
-	`, endDate).Scan(&aset)
+	`, endDateEOD).Scan(&aset)
 
 	// Query Liabilitas (TipeAkun = '2') - Saldo Normal Kredit
 	var liabilitas []models.AkunSaldo
 	db.Raw(`
-		SELECT 
+		SELECT
 			mcc.kode AS kategori_kode,
 			mcc.nama AS kategori_nama,
 			mc.kode AS akun_kode,
@@ -129,19 +130,19 @@ func calculateNeracaInternal(db *gorm.DB, endDate string) (models.NeracaResponse
 			mc.saldo_awal + COALESCE(SUM(gl.kredit), 0) - COALESCE(SUM(gl.debit), 0) AS saldo
 		FROM master_coa mc
 		JOIN master_category_coa mcc ON mc.master_category_coa_id = mcc.id
-		LEFT JOIN gl ON gl.akun_transaksi = mc.kode 
+		LEFT JOIN gl ON gl.akun_transaksi = mc.kode
 			AND gl.tanggal <= ?
 			AND gl.deleted_at IS NULL
 		WHERE mcc.tipe_akun = '2'
 		GROUP BY mcc.kode, mcc.nama, mc.kode, mc.nama, mc.saldo_awal
 		HAVING mc.saldo_awal + COALESCE(SUM(gl.kredit), 0) - COALESCE(SUM(gl.debit), 0) != 0
 		ORDER BY mc.kode
-	`, endDate).Scan(&liabilitas)
+	`, endDateEOD).Scan(&liabilitas)
 
 	// Query Ekuitas (TipeAkun = '3') - Saldo Normal Kredit
 	var ekuitas []models.AkunSaldo
 	db.Raw(`
-		SELECT 
+		SELECT
 			mcc.kode AS kategori_kode,
 			mcc.nama AS kategori_nama,
 			mc.kode AS akun_kode,
@@ -149,19 +150,19 @@ func calculateNeracaInternal(db *gorm.DB, endDate string) (models.NeracaResponse
 			mc.saldo_awal + COALESCE(SUM(gl.kredit), 0) - COALESCE(SUM(gl.debit), 0) AS saldo
 		FROM master_coa mc
 		JOIN master_category_coa mcc ON mc.master_category_coa_id = mcc.id
-		LEFT JOIN gl ON gl.akun_transaksi = mc.kode 
+		LEFT JOIN gl ON gl.akun_transaksi = mc.kode
 			AND gl.tanggal <= ?
 			AND gl.deleted_at IS NULL
 		WHERE mcc.tipe_akun = '3'
 		GROUP BY mcc.kode, mcc.nama, mc.kode, mc.nama, mc.saldo_awal
 		HAVING mc.saldo_awal + COALESCE(SUM(gl.kredit), 0) - COALESCE(SUM(gl.debit), 0) != 0
 		ORDER BY mc.kode
-	`, endDate).Scan(&ekuitas)
+	`, endDateEOD).Scan(&ekuitas)
 
 	// Hitung Laba Bersih periode berjalan
 	var labaBersih float64
 	db.Raw(`
-		SELECT 
+		SELECT
 			COALESCE(SUM(CASE WHEN mcc.tipe_akun = '4' THEN gl.kredit - gl.debit ELSE 0 END), 0) -
 			COALESCE(SUM(CASE WHEN mcc.tipe_akun = '5' THEN gl.debit - gl.kredit ELSE 0 END), 0) AS laba_bersih
 		FROM gl
@@ -169,7 +170,7 @@ func calculateNeracaInternal(db *gorm.DB, endDate string) (models.NeracaResponse
 		JOIN master_category_coa mcc ON mc.master_category_coa_id = mcc.id
 		WHERE gl.tanggal <= ? AND gl.deleted_at IS NULL
 			AND mcc.tipe_akun IN ('4', '5')
-	`, endDate).Scan(&labaBersih)
+	`, endDateEOD).Scan(&labaBersih)
 
 	asetGrouped := groupByKategori(aset)
 	liabilitasGrouped := groupByKategori(liabilitas)

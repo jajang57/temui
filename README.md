@@ -4,6 +4,10 @@ Temui is a full-stack accounting platform built with `Golang`, `React`, `Postgre
 
 The system is designed to cover end-to-end accounting operations, from master data setup and transaction entry to general ledger processing, inventory control, fixed assets, and financial reporting. It supports both web-style deployment and desktop packaging, making it suitable for internal business operations as well as distributable client software.
 
+## User Documentation
+
+Looking for how to *use* the app rather than how it's built? See the [User Guide (Bahasa Indonesia)](docs/README.md) — module-by-module explanations, input field references, and workflows for Master COA, Master Aset Tetap, Input Transaksi, Pembelian, Buku Besar, Laba Rugi, Neraca, Arus Kas, Perubahan Modal, and Fix Asset reports.
+
 ## Executive Summary
 
 This project demonstrates the development of a production-style accounting application with:

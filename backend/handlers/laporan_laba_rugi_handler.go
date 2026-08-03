@@ -21,11 +21,12 @@ func GetLaporanLabaRugi(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "start_date dan end_date wajib diisi"})
 			return
 		}
+		endDateEOD := endDate + " 23:59:59"
 
 		// Query Pendapatan (TipeAkun = '4') - Kredit - Debit
 		var pendapatan []models.AkunSaldo
 		db.Raw(`
-			SELECT 
+			SELECT
 				mcc.kode AS kategori_kode,
 				mcc.nama AS kategori_nama,
 				mc.kode AS akun_kode,
@@ -33,19 +34,19 @@ func GetLaporanLabaRugi(db *gorm.DB) gin.HandlerFunc {
 				COALESCE(SUM(gl.kredit), 0) - COALESCE(SUM(gl.debit), 0) AS saldo
 			FROM master_coa mc
 			JOIN master_category_coa mcc ON mc.master_category_coa_id = mcc.id
-			LEFT JOIN gl ON gl.akun_transaksi = mc.kode 
+			LEFT JOIN gl ON gl.akun_transaksi = mc.kode
 				AND gl.tanggal >= ? AND gl.tanggal <= ?
 				AND gl.deleted_at IS NULL
 			WHERE mcc.tipe_akun = '4'
 			GROUP BY mcc.kode, mcc.nama, mc.kode, mc.nama
 			HAVING COALESCE(SUM(gl.kredit), 0) - COALESCE(SUM(gl.debit), 0) != 0
 			ORDER BY mc.kode
-		`, startDate, endDate).Scan(&pendapatan)
+		`, startDate, endDateEOD).Scan(&pendapatan)
 
 		// Query Beban (TipeAkun = '5') - Debit - Kredit
 		var beban []models.AkunSaldo
 		db.Raw(`
-			SELECT 
+			SELECT
 				mcc.kode AS kategori_kode,
 				mcc.nama AS kategori_nama,
 				mc.kode AS akun_kode,
@@ -53,14 +54,14 @@ func GetLaporanLabaRugi(db *gorm.DB) gin.HandlerFunc {
 				COALESCE(SUM(gl.debit), 0) - COALESCE(SUM(gl.kredit), 0) AS saldo
 			FROM master_coa mc
 			JOIN master_category_coa mcc ON mc.master_category_coa_id = mcc.id
-			LEFT JOIN gl ON gl.akun_transaksi = mc.kode 
+			LEFT JOIN gl ON gl.akun_transaksi = mc.kode
 				AND gl.tanggal >= ? AND gl.tanggal <= ?
 				AND gl.deleted_at IS NULL
 			WHERE mcc.tipe_akun = '5'
 			GROUP BY mcc.kode, mcc.nama, mc.kode, mc.nama
 			HAVING COALESCE(SUM(gl.debit), 0) - COALESCE(SUM(gl.kredit), 0) != 0
 			ORDER BY mc.kode
-		`, startDate, endDate).Scan(&beban)
+		`, startDate, endDateEOD).Scan(&beban)
 
 		// Group by kategori
 		pendapatanGrouped := groupByKategori(pendapatan)

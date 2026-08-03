@@ -1,28 +1,14 @@
 import React, { useState, useEffect } from "react";
 import {
-    Box,
-    Typography,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Paper,
-    TextField,
-    Button,
-    CircularProgress,
-    Divider,
-    Collapse,
-    IconButton,
-    Select,
-    MenuItem,
-    FormControl,
-    InputLabel,
+    Box, Grid, Table, TableBody, TableCell, TableContainer,
+    TableHead, TableRow, Paper, TextField, Button, CircularProgress,
+    Collapse, IconButton, MenuItem,
 } from "@mui/material";
 import api from "../../utils/api";
 import ReportLayout from "../../components/ReportLayout";
-import { Printer, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
+import { RefreshCw } from "lucide-react";
+import { FiPrinter } from "react-icons/fi";
+import { AiFillFilePdf } from "react-icons/ai";
 import { useTheme } from "../../context/ThemeContext";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
@@ -277,91 +263,76 @@ export default function Neraca() {
 
     return (
         <ReportLayout>
-            {/* Filter Toolbar - Hidden in Print */}
-            <div className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm no-print">
-                <div className="max-w-7xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex flex-col">
-                        <h1 className="text-xl font-bold text-gray-900 tracking-tight" style={{ fontFamily: theme.fontFamily }}>
-                            NERACA {neracaMode === "komparatif" ? "KOMPARATIF" : ""}
-                        </h1>
-                        <p className="text-xs font-medium text-gray-500 mt-0.5">
-                            {neracaMode === "standar" ? `Per Tanggal: ${endDate}` : `Analisis Tahunan: ${startYear} - ${endYear}`}
-                        </p>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                        <div className="flex flex-col">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Mode Laporan</label>
+            <ReportLayout.Header>
+                <Paper sx={{ p: 2, borderRadius: 3, boxShadow: 2, background: theme.cardColor }} className="no-print">
+                    <Grid container spacing={2} alignItems="center">
+                        {/* Mode */}
+                        <Grid item xs={12} md={3}>
                             <TextField
-                                select
-                                size="small"
-                                value={neracaMode}
-                                onChange={(e) => setNeracaMode(e.target.value)}
-                                sx={{
-                                    minWidth: 200,
-                                    backgroundColor: "#f8fafc",
-                                    borderRadius: "6px",
-
-                                    "& .MuiOutlinedInput-root": {
-                                        boxShadow: "none",
-                                    },
-
-                                    "& .MuiOutlinedInput-root.Mui-focused": {
-                                        boxShadow: "none",
-                                    },
-                                }}
+                                select size="small" fullWidth label="Mode Laporan"
+                                value={neracaMode} onChange={e => setNeracaMode(e.target.value)}
+                                InputLabelProps={{ style: { color: theme.fontColor, fontFamily: theme.fontFamily } }}
+                                sx={{ background: theme.fieldColor }}
+                                inputProps={{ style: { color: theme.fontColor, fontFamily: theme.fontFamily } }}
                             >
-                                <MenuItem value="standar" sx={{ fontSize: 13 }}>Neraca Standar (Resmi)</MenuItem>
-                                <MenuItem value="komparatif" sx={{ fontSize: 13 }}>Neraca Per Tahun (Analisis)</MenuItem>
+                                <MenuItem value="standar">Neraca Standar (Resmi)</MenuItem>
+                                <MenuItem value="komparatif">Neraca Per Tahun (Analisis)</MenuItem>
                             </TextField>
-                        </div>
+                        </Grid>
 
+                        {/* Filter tanggal / tahun */}
                         {neracaMode === "standar" ? (
-                            <div className="flex flex-col">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Per Tanggal</label>
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="date"
-                                        value={endDate}
-                                        onChange={(e) => setEndDate(e.target.value)}
-                                        className="border border-slate-200 rounded px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-slate-100 focus:border-slate-400 w-40 transition-all"
-                                    />
-                                    <button onClick={fetchData} disabled={loading} className="p-2 rounded bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors">
-                                        <RefreshCw className={`w-4 h-4 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
-                                    </button>
-                                </div>
-                            </div>
+                            <Grid item xs={12} md={2.5}>
+                                <TextField
+                                    label="Per Tanggal" type="date" size="small" fullWidth
+                                    InputLabelProps={{ shrink: true, style: { color: theme.fontColor, fontFamily: theme.fontFamily } }}
+                                    value={endDate} onChange={e => setEndDate(e.target.value)}
+                                    sx={{ background: theme.fieldColor }}
+                                    inputProps={{ style: { color: theme.fontColor, fontFamily: theme.fontFamily } }}
+                                />
+                            </Grid>
                         ) : (
-                            <div className="flex flex-col">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Rentang Tahun</label>
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="number"
-                                        value={startYear}
-                                        onChange={(e) => setStartYear(e.target.value)}
-                                        className="border border-slate-200 rounded px-3 py-1.5 text-sm w-24 outline-none focus:ring-2 focus:ring-slate-100 focus:border-slate-400 transition-all font-mono"
+                            <>
+                                <Grid item xs={6} md={1.5}>
+                                    <TextField
+                                        label="Dari Tahun" type="number" size="small" fullWidth
+                                        InputLabelProps={{ shrink: true, style: { color: theme.fontColor, fontFamily: theme.fontFamily } }}
+                                        value={startYear} onChange={e => setStartYear(e.target.value)}
+                                        sx={{ background: theme.fieldColor }}
+                                        inputProps={{ style: { color: theme.fontColor, fontFamily: theme.fontFamily } }}
                                     />
-                                    <span className="text-gray-400 font-bold px-1">/</span>
-                                    <input
-                                        type="number"
-                                        value={endYear}
-                                        onChange={(e) => setEndYear(e.target.value)}
-                                        className="border border-slate-200 rounded px-3 py-1.5 text-sm w-24 outline-none focus:ring-2 focus:ring-slate-100 focus:border-slate-400 transition-all font-mono"
+                                </Grid>
+                                <Grid item xs={6} md={1.5}>
+                                    <TextField
+                                        label="Sampai Tahun" type="number" size="small" fullWidth
+                                        InputLabelProps={{ shrink: true, style: { color: theme.fontColor, fontFamily: theme.fontFamily } }}
+                                        value={endYear} onChange={e => setEndYear(e.target.value)}
+                                        sx={{ background: theme.fieldColor }}
+                                        inputProps={{ style: { color: theme.fontColor, fontFamily: theme.fontFamily } }}
                                     />
-                                    <button onClick={fetchData} disabled={loading} className="p-2 rounded bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors">
-                                        <RefreshCw className={`w-4 h-4 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
-                                    </button>
-                                </div>
-                            </div>
+                                </Grid>
+                            </>
                         )}
 
-                        <div className="h-10 w-px bg-gray-200 mx-2"></div>
-                        <button onClick={handlePrint} className="flex items-center gap-2 bg-slate-900 hover:bg-black text-white px-5 py-2 rounded text-sm font-bold shadow-md active:scale-95 transition-all">
-                            <Printer className="w-4 h-4" /> Cetak PDF
-                        </button>
-                    </div>
-                </div>
-            </div>
+                        {/* Tampilkan */}
+                        <Grid item xs={12} md={1.5}>
+                            <Button variant="contained" fullWidth
+                                sx={{ height: 40, background: theme.buttonSimpan, color: "#fff", fontFamily: theme.fontFamily }}
+                                onClick={fetchData} disabled={loading}>
+                                {loading ? <CircularProgress size={20} color="inherit" /> : "Tampilkan"}
+                            </Button>
+                        </Grid>
+
+                        {/* Action buttons */}
+                        <Grid item xs={12} sx={{ display: "flex", justifyContent: "flex-end", gap: 1, flexWrap: "wrap" }}>
+                            <Button onClick={handlePrint} variant="contained" startIcon={<FiPrinter />}
+                                sx={{ background: theme.buttonSimpan, color: "#fff", fontFamily: theme.fontFamily }}>
+                                Print
+                            </Button>
+                        </Grid>
+                    </Grid>
+                </Paper>
+            </ReportLayout.Header>
 
             <ReportLayout.Content>
                 <div className="max-w-7xl mx-auto w-full p-4 md:p-8 print:p-0">

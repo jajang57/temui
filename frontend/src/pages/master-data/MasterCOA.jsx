@@ -172,7 +172,7 @@ export default function MasterCOA() {
     // Jika pilih No, tidak terjadi apa-apa
   };
 
-  const handleEdit = async (row) => {
+  const handleEdit = (row) => {
     // Set basic form fields first
     setForm({
       kode: row.kode,
@@ -186,36 +186,6 @@ export default function MasterCOA() {
     });
     setFormattedSaldoAwal(row.saldoAwal ? formatNumber(row.saldoAwal) : "");
     setEditId(row.id);
-
-    // Fetch opening balance journal from GL to get tanggal and contra account
-    if (row.saldoAwal && row.saldoAwal !== 0) {
-      try {
-        const response = await api.get('/gl');
-        const trxNo = `OPBAL/${row.kode}`;
-
-        // Find GL entries for this opening balance
-        const openingBalanceEntries = response.data.filter(gl => gl.nomorTransaksi === trxNo);
-
-        if (openingBalanceEntries.length > 0) {
-          // Get tanggal from first entry
-          const tanggal = openingBalanceEntries[0].tanggal;
-
-          // Find contra account (the account that's not the current account)
-          const contraEntry = openingBalanceEntries.find(gl => gl.akunTransaksi !== row.kode);
-          const contraKode = contraEntry ? contraEntry.akunTransaksi : "";
-
-          // Update form with GL data
-          setForm(prev => ({
-            ...prev,
-            tanggalSaldoAwal: tanggal ? tanggal.split('T')[0] : new Date().toISOString().split('T')[0],
-            contraAccountKode: contraKode,
-          }));
-        }
-      } catch (error) {
-        console.log("Could not fetch GL data for opening balance:", error);
-        // Continue with default values if GL fetch fails
-      }
-    }
   };
 
   const handleFilter = (e) => {
@@ -544,7 +514,7 @@ export default function MasterCOA() {
                   disabled={!form.masterCategoryCOAId}
                   className="px-3 py-2 rounded-lg transition text-sm"
                   style={{
-                    background: theme.buttonEdit,
+                    background: theme.buttonUpdate,
                     color: "#fff",
                     fontFamily: theme.fontFamily,
                   }}
@@ -624,52 +594,6 @@ export default function MasterCOA() {
                 }}
               />
             </div>
-
-            {/* Konfigurasi Jurnal Saldo Awal (Muncul jika ada Saldo Awal) */}
-            {parseFloat(unformatNumber(formattedSaldoAwal)) !== 0 && formattedSaldoAwal !== "" && (
-              <div className="p-3 rounded-lg border space-y-3" style={{ borderColor: theme.border, background: theme.bgSecondary }}>
-                <h3 className="font-semibold text-sm uppercase tracking-wider" style={{ color: theme.fontColor }}>
-                  Konfigurasi Jurnal Saldo Awal
-                </h3>
-
-                <div>
-                  <label className="block mb-1 text-sm font-medium" style={{ color: theme.fontColor }}>
-                    Tanggal Saldo Awal (Cut-off)
-                  </label>
-                  <input
-                    type="date"
-                    name="tanggalSaldoAwal"
-                    value={form.tanggalSaldoAwal}
-                    onChange={handleChange}
-                    className="w-full border rounded-lg px-3 py-2 text-sm transition"
-                    style={{ background: theme.fieldColor, color: theme.fontColor }}
-                  />
-                </div>
-
-                <div>
-                  <label className="block mb-1 text-sm font-medium" style={{ color: theme.fontColor }}>
-                    Akun Penyeimbang (Lawan Jurnal)
-                  </label>
-                  <select
-                    name="contraAccountKode"
-                    value={form.contraAccountKode}
-                    onChange={handleChange}
-                    className="w-full border rounded-lg px-3 py-2 text-sm transition"
-                    style={{ background: theme.fieldColor, color: theme.fontColor }}
-                  >
-                    <option value="">-- Pilih Akun Penyeimbang --</option>
-                    {data.map(coa => (
-                      <option key={coa.id} value={coa.kode}>
-                        {coa.kode} - {coa.nama}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs mt-1 text-gray-500">
-                    Biasanya akun <strong>Modal / Ekuitas</strong> (Tipe 3) atau <strong>Historical Balancing</strong>.
-                  </p>
-                </div>
-              </div>
-            )}
 
             {/* Cashflow Mapping Section */}
             <div className="p-3 rounded-lg border" style={{ borderColor: theme.border, background: theme.bgSecondary }}>
@@ -898,7 +822,7 @@ export default function MasterCOA() {
                               onClick={() => handleEdit(row)}
                               className="px-3 py-1 rounded-lg font-semibold transition text-sm"
                               style={{
-                                background: theme.buttonEdit,
+                                background: theme.buttonUpdate,
                                 color: "#fff",
                                 fontFamily: theme.fontFamily,
                               }}
@@ -1091,7 +1015,7 @@ export default function MasterCOA() {
                                 type="button"
                                 className="px-2 py-1 rounded-lg font-semibold transition text-sm"
                                 style={{
-                                  background: theme.buttonEdit,
+                                  background: theme.buttonUpdate,
                                   color: "#fff",
                                   fontFamily: theme.fontFamily,
                                 }}

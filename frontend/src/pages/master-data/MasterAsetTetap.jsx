@@ -11,6 +11,7 @@ export default function MasterAsetTetap() {
     kategoriAset: "",
     tanggalPerolehan: "",
     hargaPerolehan: "",
+    qty: 1,
     umurEkonomis: "",
     nilaiResidu: "",
     metodePenyusutan: "Garis Lurus",
@@ -298,6 +299,7 @@ export default function MasterAsetTetap() {
       kategoriAset: row.kategoriAset || "",
       tanggalPerolehan: row.tanggalPerolehan ? row.tanggalPerolehan.split('T')[0] : "",
       hargaPerolehan: row.hargaPerolehan?.toString() || "",
+      qty: row.qty ?? 1,
       umurEkonomis: row.umurEkonomis?.toString() || "",
       nilaiResidu: row.nilaiResidu?.toString() || "",
       metodePenyusutan: row.metodePenyusutan || "Garis Lurus",
@@ -341,6 +343,7 @@ export default function MasterAsetTetap() {
       kategoriAset: "",
       tanggalPerolehan: "",
       hargaPerolehan: "",
+      qty: 1,
       umurEkonomis: "",
       nilaiResidu: "",
       metodePenyusutan: "Garis Lurus",
@@ -545,9 +548,31 @@ export default function MasterAsetTetap() {
               />
             </div>
 
+            {/* Qty */}
+            <div>
+              <label className="block mb-1 font-semibold"
+                     style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
+                Qty
+              </label>
+              <input
+                type="number"
+                name="qty"
+                value={form.qty}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-4 py-2 transition"
+                placeholder="1"
+                min="1"
+                style={{
+                  background: theme.fieldColor,
+                  color: theme.fontColor,
+                  fontFamily: theme.fontFamily,
+                }}
+              />
+            </div>
+
             {/* Nilai Residu */}
             <div>
-              <label className="block mb-1 font-semibold" 
+              <label className="block mb-1 font-semibold"
                      style={{ color: theme.fontColor, fontFamily: theme.fontFamily }}>
                 Nilai Residu
               </label>
@@ -917,6 +942,7 @@ export default function MasterAsetTetap() {
                 <th className="px-3 py-2 font-semibold border-b">Kategori</th>
                 <th className="px-3 py-2 font-semibold border-b">Tanggal Perolehan</th>
                 <th className="px-3 py-2 font-semibold border-b">Harga Perolehan</th>
+                <th className="px-3 py-2 font-semibold border-b text-center">Qty</th>
                 <th className="px-3 py-2 font-semibold border-b">Umur (Bulan)</th>
                 <th className="px-3 py-2 font-semibold border-b">Nilai Buku</th>
                 <th className="px-3 py-2 font-semibold border-b">Metode</th>
@@ -937,6 +963,7 @@ export default function MasterAsetTetap() {
                   <td className="px-3 py-2 text-right">
                     {row.hargaPerolehan ? formatNumber(row.hargaPerolehan) : "-"}
                   </td>
+                  <td className="px-3 py-2 text-center">{row.qty ?? 1}</td>
                   <td className="px-3 py-2 text-center">{row.umurEkonomis || "-"}</td>
                   <td className="px-3 py-2 text-right font-semibold" style={{ color: theme.buttonSimpan }}>
                     {row.hargaPerolehan ? formatNumber(hitungNilaiBuku(row)) : "-"}

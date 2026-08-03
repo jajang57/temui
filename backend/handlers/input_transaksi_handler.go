@@ -179,7 +179,7 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 					gl1 := models.GL{
 						Tanggal:        input.Tanggal.Time,
 						COAAkunBank:    input.CoaAkunBank,
-						AkunTransaksi:  input.AkunTransaksi,
+						AkunTransaksi:  input.CoaAkunBank,
 						Deskripsi:      input.Deskripsi,
 						Debit:          input.Debit,
 						Kredit:         0,
@@ -193,7 +193,7 @@ func PostInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 					} else {
 						fmt.Printf("[DEBUG] Created GL1 ID: %d, NoTransaksi: %s\n", gl1.ID, gl1.NomorTransaksi)
 					}
-					syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
+					syncGLSummary(db, gl1.COAAkunBank, gl1.Tanggal, gl1.Debit, gl1.Kredit)
 
 					gl2 := models.GL{
 						Tanggal:        input.Tanggal.Time,
@@ -543,7 +543,7 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 						gl1 := models.GL{
 							Tanggal:        updated.Tanggal.Time,
 							COAAkunBank:    updated.CoaAkunBank,
-							AkunTransaksi:  updated.AkunTransaksi,
+							AkunTransaksi:  updated.CoaAkunBank,
 							Deskripsi:      updated.Deskripsi,
 							Debit:          updated.Debit,
 							Kredit:         0,
@@ -552,12 +552,12 @@ func UpdateInputTransaksi(db *gorm.DB) gin.HandlerFunc {
 							ProjectNo:      updated.ProjectNo,
 							ProjectName:    updated.ProjectName}
 						db.Create(&gl1)
-						syncGLSummary(db, gl1.AkunTransaksi, gl1.Tanggal, gl1.Debit, gl1.Kredit)
+						syncGLSummary(db, gl1.COAAkunBank, gl1.Tanggal, gl1.Debit, gl1.Kredit)
 
 						gl2 := models.GL{
 							Tanggal:        updated.Tanggal.Time,
 							COAAkunBank:    updated.CoaAkunBank,
-							AkunTransaksi:  updated.CoaAkunBank,
+							AkunTransaksi:  updated.AkunTransaksi,
 							Deskripsi:      updated.Deskripsi,
 							Debit:          0,
 							Kredit:         updated.Debit,

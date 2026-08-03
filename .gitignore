@@ -14,3 +14,5 @@ build/
 Thumbs.db
 backend/tmp/
 backend/release/
+.gstack/
+release.rar

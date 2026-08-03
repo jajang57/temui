@@ -243,14 +243,12 @@ func DeleteAJE(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-// Handler untuk mengambil list COA yang is_kas_bank = false (untuk AJE)
+// Handler untuk mengambil list COA (untuk AJE) — termasuk akun Kas & Bank
 func GetCOAAkunAJE(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		db := c.MustGet("db").(*gorm.DB)
 		var coas []models.MasterCOA
 		if err := db.Preload("MasterCategoryCOA").
-			Joins("JOIN master_category_coa ON master_category_coa.id = master_coa.master_category_coa_id").
-			Where("master_category_coa.is_kas_bank = ?", false).
 			Find(&coas).Error; err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return

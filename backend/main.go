@@ -454,6 +454,8 @@ func setupClientRoutes(api *gin.RouterGroup, db *gorm.DB) {
 	api.GET("/laporan/neraca-komparatif", handlers.GetNeracaKomparatif(db))
 	api.GET("/laporan/arus-kas", handlers.GetLaporanArusKas(db))
 	api.GET("/laporan/perubahan-modal", handlers.GetLaporanPerubahanModal(db))
+	api.GET("/laporan/fix-asset-history", handlers.GetFixAssetHistory(db))
+	api.GET("/laporan/fix-asset-summary", handlers.GetFixAssetSummary(db))
 	api.GET("/dashboard/summary", handlers.GetDashboardSummary(db))
 	// Company Profile Routes
 	compHandler := handlers.NewCompanyHandler(db)

@@ -32,6 +32,9 @@ import LabaRugi from "./pages/laporan/LabaRugi";
 import Neraca from "./pages/laporan/Neraca";
 import ArusKas from "./pages/laporan/ArusKas";
 import PerubahanModal from "./pages/laporan/PerubahanModal";
+import LaporanFixAsset from "./pages/laporan/LaporanFixAsset";
+import LaporanFixAssetSummary from "./pages/laporan/LaporanFixAssetSummary";
+import PanduanPengguna from "./pages/bantuan/PanduanPengguna";
 import Transaksi from "./pages/Transaksi";
 import AJE from "./pages/transaksi/AJE";
 import Pembelian from "./pages/transaksi/Pembelian";
@@ -290,6 +293,27 @@ export default function App() {
                 <ProtectedRoute>
                   <Layout>
                     <PerubahanModal />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/laporan/fix-asset-history" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <LaporanFixAsset />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/laporan/fix-asset-summary" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <LaporanFixAssetSummary />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/bantuan/panduan-pengguna" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <PanduanPengguna />
                   </Layout>
                 </ProtectedRoute>
               } />

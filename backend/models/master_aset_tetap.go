@@ -9,6 +9,7 @@ type MasterAsetTetap struct {
 	KategoriAset            string    `json:"kategoriAset"` // Kendaraan, Bangunan, Peralatan, dll
 	TanggalPerolehan        time.Time `json:"tanggalPerolehan"`
 	HargaPerolehan          float64   `json:"hargaPerolehan" gorm:"type:decimal(18,2)"`
+	Qty                     int       `json:"qty" gorm:"default:1"`
 	UmurEkonomis            int       `json:"umurEkonomis"` // dalam bulan
 	NilaiResidu             float64   `json:"nilaiResidu" gorm:"type:decimal(18,2)"`
 	MetodePenyusutan        string    `json:"metodePenyusutan"` // "Garis Lurus", "Saldo Menurun"

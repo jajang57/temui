@@ -43,7 +43,7 @@ export default function AJE() {
   // Journal Preview State
   const [showJournalModal, setShowJournalModal] = useState(false);
   const [journalNomorTransaksi, setJournalNomorTransaksi] = useState("");
-  // Load daftar COA non kasbank untuk dropdown Nama Akun
+  // Load daftar COA (termasuk Kas & Bank) untuk dropdown Nama Akun
   useEffect(() => {
     async function fetchCOA() {
       try {

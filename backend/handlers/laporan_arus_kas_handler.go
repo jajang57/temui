@@ -238,16 +238,15 @@ func GetLaporanArusKas(db *gorm.DB) gin.HandlerFunc {
 // Helper: Hitung Laba Bersih
 func hitungLabaBersih(db *gorm.DB, start, end string) float64 {
 	var totalPendapatan, totalBeban float64
+	endEOD := end + " 23:59:59"
 
-	// Pendapatan (Tipe 4) - Kredit - Debit
-	db.Raw(`SELECT COALESCE(SUM(gl.kredit), 0) - COALESCE(SUM(gl.debit), 0) 
+	db.Raw(`SELECT COALESCE(SUM(gl.kredit), 0) - COALESCE(SUM(gl.debit), 0)
 			FROM master_coa mc JOIN master_category_coa mcc ON mc.master_category_coa_id = mcc.id JOIN gl ON gl.akun_transaksi = mc.kode
-			WHERE mcc.tipe_akun = '4' AND gl.tanggal >= ? AND gl.tanggal <= ? AND gl.deleted_at IS NULL`, start, end).Scan(&totalPendapatan)
+			WHERE mcc.tipe_akun = '4' AND gl.tanggal >= ? AND gl.tanggal <= ? AND gl.deleted_at IS NULL`, start, endEOD).Scan(&totalPendapatan)
 
-	// Beban (Tipe 5) - Debit - Kredit
 	db.Raw(`SELECT COALESCE(SUM(gl.debit), 0) - COALESCE(SUM(gl.kredit), 0)
 			FROM master_coa mc JOIN master_category_coa mcc ON mc.master_category_coa_id = mcc.id JOIN gl ON gl.akun_transaksi = mc.kode
-			WHERE mcc.tipe_akun = '5' AND gl.tanggal >= ? AND gl.tanggal <= ? AND gl.deleted_at IS NULL`, start, end).Scan(&totalBeban)
+			WHERE mcc.tipe_akun = '5' AND gl.tanggal >= ? AND gl.tanggal <= ? AND gl.deleted_at IS NULL`, start, endEOD).Scan(&totalBeban)
 
 	return totalPendapatan - totalBeban
 }
@@ -255,19 +254,21 @@ func hitungLabaBersih(db *gorm.DB, start, end string) float64 {
 // Helper: Hitung Beban Non-Kas (Penyusutan)
 func hitungBebanNonKas(db *gorm.DB, start, end string) float64 {
 	var total float64
+	endEOD := end + " 23:59:59"
 	db.Raw(`SELECT COALESCE(SUM(gl.debit), 0) - COALESCE(SUM(gl.kredit), 0)
 			FROM master_coa mc JOIN master_category_coa mcc ON mc.master_category_coa_id = mcc.id JOIN gl ON gl.akun_transaksi = mc.kode
-			WHERE mcc.tipe_akun = '5' 
+			WHERE mcc.tipe_akun = '5'
 			AND (LOWER(mc.nama) LIKE '%penyusutan%' OR LOWER(mc.nama) LIKE '%amortisasi%')
-			AND gl.tanggal >= ? AND gl.tanggal <= ? AND gl.deleted_at IS NULL`, start, end).Scan(&total)
+			AND gl.tanggal >= ? AND gl.tanggal <= ? AND gl.deleted_at IS NULL`, start, endEOD).Scan(&total)
 	return total
 }
 
 // Helper: Get Saldo Akun Specific Date
 func getSaldoAkun(db *gorm.DB, kodeAkun string, tipeAkun string, start, end string) float64 {
 	var debit, kredit float64
-	db.Raw(`SELECT COALESCE(SUM(debit), 0), COALESCE(SUM(kredit), 0) FROM gl 
-			WHERE akun_transaksi = ? AND tanggal >= ? AND tanggal <= ? AND deleted_at IS NULL`, kodeAkun, start, end).Row().Scan(&debit, &kredit)
+	endEOD := end + " 23:59:59"
+	db.Raw(`SELECT COALESCE(SUM(debit), 0), COALESCE(SUM(kredit), 0) FROM gl
+			WHERE akun_transaksi = ? AND tanggal >= ? AND tanggal <= ? AND deleted_at IS NULL`, kodeAkun, start, endEOD).Row().Scan(&debit, &kredit)
 
 	switch tipeAkun {
 	case "1", "5": // Saldo Normal Debit

@@ -125,6 +125,8 @@ export default function SideNavbar({ onClose, isOpen = true }) {
         { name: "Neraca", to: "/laporan/neraca" },
         { name: "Arus Kas", to: "/laporan/arus-kas" },
         { name: "Perubahan Modal", to: "/laporan/perubahan-modal" },
+        { name: "Fix Asset History", to: "/laporan/fix-asset-history" },
+        { name: "Fix Asset Summary", to: "/laporan/fix-asset-summary" },
       ],
     },
     {
@@ -169,7 +171,7 @@ export default function SideNavbar({ onClose, isOpen = true }) {
         </svg>
       ),
       dropdown: [
-        { name: "Panduan Pengguna (FAQ)" },
+        { name: "Panduan Pengguna (FAQ)", to: "/bantuan/panduan-pengguna" },
         { name: "Chat Dukungan/ Tiket Masalah" },
         { name: "Kontak CS/ Konsultan Pajak" },
       ],

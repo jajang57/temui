@@ -1,75 +1,56 @@
 import React, { useState, useEffect } from "react";
 import {
-  Box,
-  Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  TextField,
-  Button,
-  CircularProgress,
-  Collapse,
-  IconButton,
+  Box, Paper, Grid, TextField, Button, CircularProgress,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  Collapse, IconButton,
 } from "@mui/material";
-import { useTheme } from "../../context/ThemeContext";
-import api from "../../utils/api";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
-import PrintIcon from "@mui/icons-material/Print";
-import DownloadIcon from "@mui/icons-material/Download";
+import { FiPrinter } from "react-icons/fi";
+import { AiFillFilePdf } from "react-icons/ai";
+import { FaFileExcel } from "react-icons/fa";
+import { useTheme } from "../../context/ThemeContext";
+import ReportLayout from "../../components/ReportLayout";
+import api from "../../utils/api";
 
-// Format angka ke Rupiah
 function formatRupiah(value) {
-  if (!value || isNaN(value)) return "Rp 0";
+  if (value === undefined || value === null || isNaN(value)) return "Rp 0";
   const num = Number(value);
   const formatted = Math.abs(num).toLocaleString("id-ID");
-  if (num < 0) {
-    return `(Rp ${formatted})`;
-  }
-  return `Rp ${formatted}`;
+  return num < 0 ? `(Rp ${formatted})` : `Rp ${formatted}`;
 }
 
-// Komponen untuk grup dengan collapse
+function formatDate(dateStr) {
+  if (!dateStr) return dateStr;
+  const [y, m, d] = dateStr.split("-");
+  return `${d}/${m}/${y}`;
+}
+
 function GroupSection({ group, theme }) {
   const [open, setOpen] = useState(true);
+
+  const headerBg = theme.tableHeaderColor || "#f0f0f0";
+  const bodyBg   = theme.tableBodyColor   || "#fff";
+  const altBg    = theme.tableAltRowColor || "#f9f9f9";
+  const fontColor = theme.tableFontColor  || "#222";
+  const fontFamily = theme.tableFontFamily;
 
   return (
     <>
       <TableRow
-        sx={{
-          backgroundColor: theme.tableHeaderColor || "#f5f5f5",
-          cursor: "pointer",
-        }}
         onClick={() => setOpen(!open)}
+        sx={{ background: headerBg, cursor: "pointer", "&:hover": { opacity: 0.85 } }}
       >
-        <TableCell
-          colSpan={2}
-          sx={{
-            fontWeight: "bold",
-            color: theme.tableFontColor,
-            fontFamily: theme.tableFontFamily,
-            pl: 2,
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center" }}>
-            <IconButton size="small" sx={{ mr: 1 }}>
-              {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+        <TableCell sx={{ color: fontColor, fontFamily, fontWeight: 600, py: 1 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <IconButton size="small" sx={{ p: 0.25 }}>
+              {open ? <KeyboardArrowUpIcon fontSize="small" /> : <KeyboardArrowDownIcon fontSize="small" />}
             </IconButton>
-            {group.nama}
+            {group.kode}
           </Box>
         </TableCell>
-        <TableCell
-          align="right"
-          sx={{
-            fontWeight: "bold",
-            color: theme.tableFontColor,
-            fontFamily: theme.tableFontFamily,
-          }}
-        >
+        <TableCell sx={{ color: fontColor, fontFamily, fontWeight: 600, py: 1 }}>{group.nama}</TableCell>
+        <TableCell align="right" sx={{ color: fontColor, fontFamily, fontWeight: 600, py: 1 }}>
           {formatRupiah(group.subtotal)}
         </TableCell>
       </TableRow>
@@ -79,34 +60,14 @@ function GroupSection({ group, theme }) {
             <Table size="small">
               <TableBody>
                 {group.items?.map((item, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell
-                      sx={{
-                        pl: 6,
-                        color: theme.tableFontColor,
-                        fontFamily: theme.tableFontFamily,
-                        background: theme.tableBodyColor,
-                      }}
-                    >
+                  <TableRow key={idx} sx={{ background: idx % 2 === 0 ? bodyBg : altBg }}>
+                    <TableCell sx={{ pl: 5, color: fontColor, fontFamily, py: 0.75, width: "15%" }}>
                       {item.akunKode}
                     </TableCell>
-                    <TableCell
-                      sx={{
-                        color: theme.tableFontColor,
-                        fontFamily: theme.tableFontFamily,
-                        background: theme.tableBodyColor,
-                      }}
-                    >
+                    <TableCell sx={{ color: fontColor, fontFamily, py: 0.75 }}>
                       {item.akunNama}
                     </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{
-                        color: theme.tableFontColor,
-                        fontFamily: theme.tableFontFamily,
-                        background: theme.tableBodyColor,
-                      }}
-                    >
+                    <TableCell align="right" sx={{ color: fontColor, fontFamily, py: 0.75, pr: 2 }}>
                       {formatRupiah(item.saldo)}
                     </TableCell>
                   </TableRow>
@@ -120,18 +81,14 @@ function GroupSection({ group, theme }) {
   );
 }
 
-import ReportLayout from "../../components/ReportLayout";
-
 export default function LabaRugi() {
   const { theme } = useTheme();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [data, setData] = useState(null);
-
-  // Get current year dates
   const currentYear = new Date().getFullYear();
   const [startDate, setStartDate] = useState(`${currentYear}-01-01`);
-  const [endDate, setEndDate] = useState(`${currentYear}-12-31`);
+  const [endDate, setEndDate]     = useState(`${currentYear}-12-31`);
+  const [data, setData]           = useState(null);
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState("");
 
   const fetchData = async () => {
     setLoading(true);
@@ -141,314 +98,238 @@ export default function LabaRugi() {
         params: { start_date: startDate, end_date: endDate },
       });
       setData(res.data);
-    } catch (err) {
+    } catch {
       setError("Gagal mengambil data Laporan Laba Rugi");
-      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = () => window.print();
+
+  const handleExportPDF = async () => {
+    const jsPDF = (await import("jspdf")).default;
+    const autoTable = (await import("jspdf-autotable")).default;
+    const doc = new jsPDF('p', 'mm', 'a4');
+    doc.setFontSize(14);
+    doc.text("Laporan Laba Rugi", 105, 16, { align: 'center' });
+    doc.setFontSize(10);
+    doc.text(`Periode: ${formatDate(startDate)} s/d ${formatDate(endDate)}`, 105, 23, { align: 'center' });
+
+    const body = [];
+    body.push([{ content: 'PENDAPATAN', colSpan: 3, styles: { fillColor: [227, 242, 253], textColor: [21, 101, 192], fontStyle: 'bold' } }]);
+    data?.pendapatan?.forEach(g => {
+      body.push([{ content: g.kode, styles: { fontStyle: 'bold' } }, { content: g.nama, styles: { fontStyle: 'bold' } }, { content: formatRupiah(g.subtotal), styles: { halign: 'right', fontStyle: 'bold' } }]);
+      g.items?.forEach(item => body.push([{ content: '  ' + item.akunKode }, item.akunNama, { content: formatRupiah(item.saldo), styles: { halign: 'right' } }]));
+    });
+    body.push([{ content: 'TOTAL PENDAPATAN', colSpan: 2, styles: { fillColor: [187, 222, 251], textColor: [13, 71, 161], fontStyle: 'bold' } }, { content: formatRupiah(data?.totalPendapatan), styles: { halign: 'right', fillColor: [187, 222, 251], textColor: [13, 71, 161], fontStyle: 'bold' } }]);
+    body.push([{ content: 'BEBAN', colSpan: 3, styles: { fillColor: [255, 235, 238], textColor: [198, 40, 40], fontStyle: 'bold' } }]);
+    data?.beban?.forEach(g => {
+      body.push([{ content: g.kode, styles: { fontStyle: 'bold' } }, { content: g.nama, styles: { fontStyle: 'bold' } }, { content: formatRupiah(g.subtotal), styles: { halign: 'right', fontStyle: 'bold' } }]);
+      g.items?.forEach(item => body.push([{ content: '  ' + item.akunKode }, item.akunNama, { content: formatRupiah(item.saldo), styles: { halign: 'right' } }]));
+    });
+    body.push([{ content: 'TOTAL BEBAN', colSpan: 2, styles: { fillColor: [255, 205, 210], textColor: [183, 28, 28], fontStyle: 'bold' } }, { content: formatRupiah(data?.totalBeban), styles: { halign: 'right', fillColor: [255, 205, 210], textColor: [183, 28, 28], fontStyle: 'bold' } }]);
+    const lbColor = data?.labaBersih >= 0 ? [200, 230, 201] : [255, 205, 210];
+    const lbTextColor = data?.labaBersih >= 0 ? [46, 125, 50] : [198, 40, 40];
+    body.push([{ content: data?.labaBersih >= 0 ? 'LABA BERSIH' : 'RUGI BERSIH', colSpan: 2, styles: { fillColor: lbColor, textColor: lbTextColor, fontStyle: 'bold', fontSize: 11 } }, { content: formatRupiah(data?.labaBersih), styles: { halign: 'right', fillColor: lbColor, textColor: lbTextColor, fontStyle: 'bold', fontSize: 11 } }]);
+
+    autoTable(doc, {
+      startY: 28,
+      head: [['Kode', 'Nama Akun', 'Jumlah']],
+      body,
+      headStyles: { fillColor: [30, 136, 229], fontSize: 9 },
+      styles: { fontSize: 9 },
+      columnStyles: { 0: { cellWidth: 30 }, 2: { halign: 'right', cellWidth: 45 } },
+      margin: { left: 12, right: 12 },
+    });
+    doc.save("LabaRugi.pdf");
   };
+
+  const handleExportExcel = async () => {
+    const xlsx = await import("xlsx");
+    const wsData = [
+      ["Laporan Laba Rugi", "", ""],
+      [`Periode: ${formatDate(startDate)} s/d ${formatDate(endDate)}`, "", ""],
+      [],
+      ["Kode", "Nama Akun", "Jumlah"],
+      ["PENDAPATAN", "", ""],
+    ];
+    data?.pendapatan?.forEach(g => {
+      wsData.push([g.kode, g.nama, g.subtotal]);
+      g.items?.forEach(item => wsData.push(["  " + item.akunKode, item.akunNama, item.saldo]));
+    });
+    wsData.push(["TOTAL PENDAPATAN", "", data?.totalPendapatan]);
+    wsData.push([]);
+    wsData.push(["BEBAN", "", ""]);
+    data?.beban?.forEach(g => {
+      wsData.push([g.kode, g.nama, g.subtotal]);
+      g.items?.forEach(item => wsData.push(["  " + item.akunKode, item.akunNama, item.saldo]));
+    });
+    wsData.push(["TOTAL BEBAN", "", data?.totalBeban]);
+    wsData.push([]);
+    wsData.push([data?.labaBersih >= 0 ? "LABA BERSIH" : "RUGI BERSIH", "", data?.labaBersih]);
+    const ws = xlsx.utils.aoa_to_sheet(wsData);
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(wb, ws, "LabaRugi");
+    xlsx.writeFile(wb, "LabaRugi.xlsx");
+  };
+
+  const thCell = { fontWeight: "bold", color: theme.tableFontColor, fontFamily: theme.tableFontFamily, background: theme.tableHeaderColor, py: 1.25 };
 
   return (
     <ReportLayout>
-      {/* Sticky Header - Hidden during print */}
-      <div className="sticky top-[80px] z-40 bg-white border-b border-gray-200 shadow-sm no-print">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
-          <div className="text-center md:text-left">
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900" style={{ fontFamily: theme.fontFamily }}>
-              Laporan Laba Rugi
-            </h1>
-            {data && (
-              <p className="text-sm font-medium text-gray-500 mt-1" style={{ fontFamily: theme.fontFamily }}>
-                Periode: <span className="text-gray-900">{data.periode}</span>
-              </p>
-            )}
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <TextField
-                type="date"
-                label="Tanggal Mulai"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                size="small"
-                sx={{
-                  width: 150,
-                  "& .MuiInputBase-root": {
-                    backgroundColor: theme.fieldColor,
-                    color: theme.fontColor,
-                    fontFamily: theme.fontFamily,
-                  },
-                }}
-              />
-              <TextField
-                type="date"
-                label="Tanggal Akhir"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                size="small"
-                sx={{
-                  width: 150,
-                  "& .MuiInputBase-root": {
-                    backgroundColor: theme.fieldColor,
-                    color: theme.fontColor,
-                    fontFamily: theme.fontFamily,
-                  },
-                }}
-              />
-              <Button
-                variant="contained"
-                onClick={fetchData}
-                disabled={loading}
-                sx={{
-                  bgcolor: "#1976d2",
-                  "&:hover": { bgcolor: "#1565c0" },
-                  height: 40,
-                  boxShadow: "none"
-                }}
-              >
+      <ReportLayout.Header>
+        <Paper sx={{ p: 2, borderRadius: 3, boxShadow: 2, background: theme.cardColor }}>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={3}>
+              <TextField label="Tanggal Mulai" type="date" size="small" fullWidth
+                InputLabelProps={{ shrink: true, style: { color: theme.fontColor, fontFamily: theme.fontFamily } }}
+                value={startDate} onChange={e => setStartDate(e.target.value)}
+                sx={{ background: theme.fieldColor }}
+                inputProps={{ style: { color: theme.fontColor, fontFamily: theme.fontFamily } }} />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <TextField label="Tanggal Akhir" type="date" size="small" fullWidth
+                InputLabelProps={{ shrink: true, style: { color: theme.fontColor, fontFamily: theme.fontFamily } }}
+                value={endDate} onChange={e => setEndDate(e.target.value)}
+                sx={{ background: theme.fieldColor }}
+                inputProps={{ style: { color: theme.fontColor, fontFamily: theme.fontFamily } }} />
+            </Grid>
+            <Grid item xs={12} md={2}>
+              <Button variant="contained" fullWidth
+                sx={{ height: 40, background: theme.buttonSimpan, color: "#fff", fontFamily: theme.fontFamily }}
+                onClick={fetchData} disabled={loading}>
                 {loading ? <CircularProgress size={20} color="inherit" /> : "Tampilkan"}
               </Button>
-              <Button
-                variant="outlined"
-                startIcon={<PrintIcon />}
-                onClick={handlePrint}
-                sx={{
-                  height: 40,
-                  color: "#333",
-                  borderColor: "#ddd",
-                  "&:hover": { borderColor: "#bbb", bgcolor: "#f5f5f5" }
-                }}
-              >
-                Cetak
+            </Grid>
+            <Grid item xs={12} sx={{ display: "flex", justifyContent: "flex-end", gap: 1, flexWrap: "wrap" }}>
+              <Button onClick={handlePrint} variant="contained" startIcon={<FiPrinter />}
+                sx={{ background: theme.buttonSimpan, color: "#fff", fontFamily: theme.fontFamily }}>
+                Print
               </Button>
-            </div>
-          </div>
-        </div>
-      </div>
+              <Button onClick={handleExportPDF} variant="contained" startIcon={<AiFillFilePdf />}
+                sx={{ background: theme.buttonHapus, color: "#fff", fontFamily: theme.fontFamily }}>
+                Export PDF
+              </Button>
+              <Button onClick={handleExportExcel} variant="contained" startIcon={<FaFileExcel />}
+                sx={{ background: theme.buttonEdit || "#2e7d32", color: "#fff", fontFamily: theme.fontFamily }}>
+                Export Excel
+              </Button>
+            </Grid>
+          </Grid>
+        </Paper>
+      </ReportLayout.Header>
+
+      {error && <Box sx={{ px: 3, py: 1, color: "error.main", fontFamily: theme.fontFamily }}>{error}</Box>}
 
       <ReportLayout.Content>
-        <div className="max-w-6xl mx-auto w-full p-4 md:p-6 lg:p-8">
-          {/* Header - Visible only in Print */}
-          <div className="text-center mb-8 border-b-2 border-gray-900 pb-4 print:block hidden">
-            <h1 className="text-2xl font-bold text-gray-900">Laporan Laba Rugi</h1>
-            {data && <p className="text-gray-600 mt-1">Periode: {data.periode}</p>}
-          </div>
+        <Box sx={{ maxWidth: 900, mx: "auto", width: "100%", p: { xs: 2, md: 3 } }}>
 
-          {error && (
-            <Box sx={{ color: "error.main", mb: 2, textAlign: "center" }}>
-              {error}
+          {/* Report title (visible in screen + print) */}
+          <Box sx={{ textAlign: "center", mb: 3 }}>
+            <Box sx={{ fontWeight: 700, fontSize: 20, color: theme.fontColor, fontFamily: theme.fontFamily }}>
+              Laporan Laba Rugi
             </Box>
-          )}
+            {data && (
+              <Box sx={{ fontSize: 13, color: theme.fontColor, opacity: 0.65, mt: 0.5, fontFamily: theme.fontFamily }}>
+                Periode: {formatDate(startDate)} s/d {formatDate(endDate)}
+              </Box>
+            )}
+          </Box>
 
           {loading && (
-            <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+            <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
               <CircularProgress />
             </Box>
           )}
 
           {data && !loading && (
-            <TableContainer
-              component={Paper}
-              sx={{
-                boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)",
-                borderRadius: 2,
-                background: theme.cardColor,
-                width: '100%',
-                mx: "auto",
-                height: "auto",
-                overflow: "visible",
-              }}
-            >
-              <Table stickyHeader>
-                <TableHead sx={{ position: "sticky", top: 0, zIndex: 10 }}>
-                  <TableRow sx={{ backgroundColor: theme.tableHeaderColor }}>
-                    <TableCell
-                      sx={{
-                        fontWeight: "bold",
-                        color: theme.tableFontColor,
-                        fontFamily: theme.tableFontFamily,
-                        width: "15%",
-                        background: theme.tableHeaderColor,
-                      }}
-                    >
-                      Kode
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        fontWeight: "bold",
-                        color: theme.tableFontColor,
-                        fontFamily: theme.tableFontFamily,
-                        width: "55%",
-                        background: theme.tableHeaderColor,
-                      }}
-                    >
-                      Nama Akun
-                    </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{
-                        fontWeight: "bold",
-                        color: theme.tableFontColor,
-                        fontFamily: theme.tableFontFamily,
-                        width: "30%",
-                        background: theme.tableHeaderColor,
-                      }}
-                    >
-                      Jumlah
-                    </TableCell>
+            <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: 2, background: theme.cardColor, overflow: "hidden" }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ ...thCell, width: "15%" }}>Kode</TableCell>
+                    <TableCell sx={thCell}>Nama Akun</TableCell>
+                    <TableCell align="right" sx={{ ...thCell, width: "25%", pr: 2 }}>Jumlah</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {/* PENDAPATAN */}
-                  <TableRow sx={{ backgroundColor: "#e3f2fd" }}>
-                    <TableCell
-                      colSpan={3}
-                      sx={{
-                        fontWeight: "bold",
-                        fontSize: 16,
-                        color: "#1565c0",
-                        fontFamily: theme.tableFontFamily,
-                      }}
-                    >
+
+                  {/* ── PENDAPATAN ── */}
+                  <TableRow>
+                    <TableCell colSpan={3} sx={{ background: "#e3f2fd", color: "#1565c0", fontWeight: 700, fontSize: 13, fontFamily: theme.tableFontFamily, py: 1, letterSpacing: 0.5 }}>
                       PENDAPATAN
                     </TableCell>
                   </TableRow>
                   {data.pendapatan?.map((group, idx) => (
                     <GroupSection key={idx} group={group} theme={theme} />
                   ))}
-                  <TableRow sx={{ backgroundColor: "#bbdefb" }}>
-                    <TableCell
-                      colSpan={2}
-                      sx={{
-                        fontWeight: "bold",
-                        fontFamily: theme.tableFontFamily,
-                        color: "#0d47a1",
-                      }}
-                    >
+                  <TableRow sx={{ background: "#bbdefb" }}>
+                    <TableCell colSpan={2} sx={{ fontWeight: 700, color: "#0d47a1", fontFamily: theme.tableFontFamily, py: 1.25 }}>
                       TOTAL PENDAPATAN
                     </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{
-                        fontWeight: "bold",
-                        fontFamily: theme.tableFontFamily,
-                        color: "#0d47a1",
-                      }}
-                    >
+                    <TableCell align="right" sx={{ fontWeight: 700, color: "#0d47a1", fontFamily: theme.tableFontFamily, py: 1.25, pr: 2 }}>
                       {formatRupiah(data.totalPendapatan)}
                     </TableCell>
                   </TableRow>
 
-                  {/* BEBAN */}
-                  <TableRow sx={{ backgroundColor: "#ffebee" }}>
-                    <TableCell
-                      colSpan={3}
-                      sx={{
-                        fontWeight: "bold",
-                        fontSize: 16,
-                        color: "#c62828",
-                        fontFamily: theme.tableFontFamily,
-                        pt: 3,
-                      }}
-                    >
+                  {/* spacer */}
+                  <TableRow><TableCell colSpan={3} sx={{ height: 8, border: 0, background: theme.cardColor }} /></TableRow>
+
+                  {/* ── BEBAN ── */}
+                  <TableRow>
+                    <TableCell colSpan={3} sx={{ background: "#ffebee", color: "#c62828", fontWeight: 700, fontSize: 13, fontFamily: theme.tableFontFamily, py: 1, letterSpacing: 0.5 }}>
                       BEBAN
                     </TableCell>
                   </TableRow>
                   {data.beban?.map((group, idx) => (
                     <GroupSection key={idx} group={group} theme={theme} />
                   ))}
-                  <TableRow sx={{ backgroundColor: "#ffcdd2" }}>
-                    <TableCell
-                      colSpan={2}
-                      sx={{
-                        fontWeight: "bold",
-                        fontFamily: theme.tableFontFamily,
-                        color: "#b71c1c",
-                      }}
-                    >
+                  <TableRow sx={{ background: "#ffcdd2" }}>
+                    <TableCell colSpan={2} sx={{ fontWeight: 700, color: "#b71c1c", fontFamily: theme.tableFontFamily, py: 1.25 }}>
                       TOTAL BEBAN
                     </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{
-                        fontWeight: "bold",
-                        fontFamily: theme.tableFontFamily,
-                        color: "#b71c1c",
-                      }}
-                    >
+                    <TableCell align="right" sx={{ fontWeight: 700, color: "#b71c1c", fontFamily: theme.tableFontFamily, py: 1.25, pr: 2 }}>
                       {formatRupiah(data.totalBeban)}
                     </TableCell>
                   </TableRow>
 
-                  {/* LABA/RUGI BERSIH */}
-                  <TableRow
-                    sx={{
-                      backgroundColor: data.labaBersih >= 0 ? "#c8e6c9" : "#ffcdd2",
-                    }}
-                  >
-                    <TableCell
-                      colSpan={2}
-                      sx={{
-                        fontWeight: "bold",
-                        fontSize: 18,
-                        fontFamily: theme.tableFontFamily,
-                        color: data.labaBersih >= 0 ? "#2e7d32" : "#c62828",
-                        pt: 2,
-                        pb: 2,
-                      }}
-                    >
+                  {/* spacer */}
+                  <TableRow><TableCell colSpan={3} sx={{ height: 8, border: 0, background: theme.cardColor }} /></TableRow>
+
+                  {/* ── LABA / RUGI BERSIH ── */}
+                  <TableRow sx={{ background: data.labaBersih >= 0 ? "#c8e6c9" : "#ffcdd2" }}>
+                    <TableCell colSpan={2} sx={{
+                      fontWeight: 700, fontSize: 15, fontFamily: theme.tableFontFamily, py: 1.5,
+                      color: data.labaBersih >= 0 ? "#2e7d32" : "#c62828",
+                    }}>
                       {data.labaBersih >= 0 ? "LABA BERSIH" : "RUGI BERSIH"}
                     </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{
-                        fontWeight: "bold",
-                        fontSize: 18,
-                        fontFamily: theme.tableFontFamily,
-                        color: data.labaBersih >= 0 ? "#2e7d32" : "#c62828",
-                        pt: 2,
-                        pb: 2,
-                      }}
-                    >
+                    <TableCell align="right" sx={{
+                      fontWeight: 700, fontSize: 15, fontFamily: theme.tableFontFamily, py: 1.5, pr: 2,
+                      color: data.labaBersih >= 0 ? "#2e7d32" : "#c62828",
+                    }}>
                       {formatRupiah(data.labaBersih)}
                     </TableCell>
                   </TableRow>
+
                 </TableBody>
               </Table>
             </TableContainer>
           )}
-        </div>
-      </ReportLayout.Content>
+        </Box>
 
-      {/* Print Styles */}
-      <style>
-        {`
+        {/* Print area */}
+        <style>{`
           @media print {
-            .no-print {
-              display: none !important;
-            }
-            .print-header {
-              margin-bottom: 20px;
-            }
-            body {
-              print-color-adjust: exact;
-              -webkit-print-color-adjust: exact;
-            }
+            @page { size: A4 portrait; margin: 15mm; }
+            body * { visibility: hidden; }
+            .print-only, .print-only * { visibility: visible; }
           }
-        `}
-      </style>
+        `}</style>
+      </ReportLayout.Content>
     </ReportLayout>
   );
 }

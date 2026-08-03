@@ -243,7 +243,8 @@ func (h *PembelianHandler) GetAllPembelian(c *gin.Context) {
 	// Build query with JOIN
 	query := db.Table("pembelians").
 		Select("pembelians.*, master_pemasoks.nama as supplier_nama").
-		Joins("LEFT JOIN master_pemasoks ON pembelians.supplier_id = master_pemasoks.id")
+		Joins("LEFT JOIN master_pemasoks ON pembelians.supplier_id = master_pemasoks.id").
+		Where("pembelians.deleted_at IS NULL")
 
 	// Global Search (AP Invoice OR Supplier Name OR Status)
 	if search != "" {
